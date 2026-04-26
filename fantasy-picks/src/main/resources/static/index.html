@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="FantasyPicks - Aggregate fantasy football player rankings from multiple sources to make the best draft picks.">
+    <title>FantasyPicks | Fantasy Football Rankings Aggregator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- HEADER / NAVIGATION                        -->
+    <!-- ═══════════════════════════════════════════ -->
+    <header id="main-header">
+        <div class="header-inner">
+            <div class="logo-group">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect width="40" height="40" rx="10" fill="url(#logo-grad)"/>
+                        <path d="M12 28V14h10v4h-6v3h5v4h-5v3H12z" fill="#fff"/>
+                        <path d="M22 14h5c2.2 0 4 1.8 4 4s-1.8 4-4 4h-1v6h-4V14z" fill="rgba(255,255,255,.7)"/>
+                        <defs>
+                            <linearGradient id="logo-grad" x1="0" y1="0" x2="40" y2="40">
+                                <stop stop-color="#6C5CE7"/>
+                                <stop offset="1" stop-color="#00B894"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+                <h1 class="logo-text">Fantasy<span class="logo-accent">Picks</span></h1>
+            </div>
+            <nav id="main-nav">
+                <a href="#" class="nav-link active" data-section="rankings">Rankings</a>
+                <a href="#" class="nav-link" data-section="sources">Sources</a>
+                <a href="#" class="nav-link" data-section="about">About</a>
+            </nav>
+            <div class="header-actions">
+                <button id="btn-refresh-data" class="btn btn-primary" title="Refresh player data from selected sources">
+                    <svg class="btn-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"/></svg>
+                    Refresh Data
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- MAIN CONTENT                               -->
+    <!-- ═══════════════════════════════════════════ -->
+    <main id="main-content">
+
+        <!-- STATUS BAR -->
+        <section id="status-bar">
+            <div class="status-inner">
+                <div class="status-item">
+                    <span class="status-label">Players Loaded</span>
+                    <span id="stat-player-count" class="status-value">—</span>
+                </div>
+                <div class="status-divider"></div>
+                <div class="status-item">
+                    <span class="status-label">Active Sources</span>
+                    <span id="stat-source-count" class="status-value">—</span>
+                </div>
+                <div class="status-divider"></div>
+                <div class="status-item">
+                    <span class="status-label">Last Updated</span>
+                    <span id="stat-last-updated" class="status-value">—</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!-- SECTION: DATA SOURCE SELECTION          -->
+        <!-- ═══════════════════════════════════════ -->
+        <section id="section-sources" class="content-section">
+            <div class="section-header">
+                <h2 class="section-title">Data Sources</h2>
+                <p class="section-subtitle">Select where you want player ranking data pulled from. Each source adds a column to the table.</p>
+            </div>
+            <div id="source-cards" class="source-grid">
+                <!-- Source cards are populated by JS -->
+            </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!-- SECTION: FILTERS & SEARCH               -->
+        <!-- ═══════════════════════════════════════ -->
+        <section id="section-filters" class="content-section">
+            <div class="filters-bar">
+                <div class="search-box">
+                    <svg class="search-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
+                    <input type="text" id="input-search" placeholder="Search players..." autocomplete="off">
+                </div>
+                <div class="filter-group">
+                    <label for="filter-position" class="filter-label">Position</label>
+                    <select id="filter-position" class="filter-select">
+                        <option value="ALL">All Positions</option>
+                        <option value="QB">QB</option>
+                        <option value="RB">RB</option>
+                        <option value="WR">WR</option>
+                        <option value="TE">TE</option>
+                        <option value="K">K</option>
+                        <option value="DEF">DEF</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-team" class="filter-label">Team</label>
+                    <select id="filter-team" class="filter-select">
+                        <option value="ALL">All Teams</option>
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══════════════════════════════════════ -->
+        <!-- SECTION: PLAYER RANKINGS TABLE          -->
+        <!-- ═══════════════════════════════════════ -->
+        <section id="section-rankings" class="content-section">
+            <div class="table-wrapper">
+                <table id="rankings-table">
+                    <thead>
+                        <tr id="table-header-row">
+                            <th class="col-rank" data-sort="overallRank">Rank</th>
+                            <th class="col-player" data-sort="name">Player</th>
+                            <th class="col-pos" data-sort="position">Pos</th>
+                            <th class="col-team" data-sort="team">Team</th>
+                            <!-- Source-specific ranking columns are injected by JS -->
+                            <th class="col-overall" data-sort="overallRank">Overall</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rankings-body">
+                        <!-- Rows populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- EMPTY / LOADING STATES -->
+            <div id="state-loading" class="state-panel hidden">
+                <div class="spinner"></div>
+                <p>Fetching player data…</p>
+            </div>
+            <div id="state-empty" class="state-panel">
+                <svg class="empty-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="8" y="12" width="48" height="40" rx="4" stroke="currentColor" stroke-width="2"/>
+                    <line x1="8" y1="22" x2="56" y2="22" stroke="currentColor" stroke-width="2"/>
+                    <line x1="24" y1="12" x2="24" y2="52" stroke="currentColor" stroke-width="2"/>
+                    <circle cx="36" cy="37" r="8" stroke="currentColor" stroke-width="2"/>
+                    <line x1="42" y1="43" x2="50" y2="51" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <h3>No Player Data Yet</h3>
+                <p>Select your data sources above, then click <strong>Refresh Data</strong> to fetch the latest player rankings.</p>
+            </div>
+            <div id="state-error" class="state-panel hidden">
+                <svg class="error-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="32" cy="32" r="24" stroke="currentColor" stroke-width="2"/>
+                    <line x1="32" y1="20" x2="32" y2="36" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                    <circle cx="32" cy="44" r="2" fill="currentColor"/>
+                </svg>
+                <h3>Something Went Wrong</h3>
+                <p id="error-message">Could not load player data. Please try again.</p>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- FOOTER                                     -->
+    <!-- ═══════════════════════════════════════════ -->
+    <footer id="main-footer">
+        <p>&copy; 2026 FantasyPicks &mdash; Pick smarter, win bigger.</p>
+    </footer>
+
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- TOAST NOTIFICATION                         -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="toast-container"></div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
