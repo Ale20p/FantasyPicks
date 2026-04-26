@@ -33,8 +33,8 @@ public class FantasyProsScraper implements RankingScraper {
 
     private static final String SOURCE_ID = "fantasypros";
     private static final String SOURCE_NAME = "FantasyPros";
-    private static final String RANKINGS_URL =
-            "https://www.fantasypros.com/nfl/rankings/consensus-cheatsheets.php";
+    private static final String RANKINGS_URL_TEMPLATE =
+            "https://www.fantasypros.com/nfl/rankings/consensus-cheatsheets.php?year=%d";
 
     /**
      * Regex to extract the ecrData JSON object from the page's JavaScript.
@@ -61,11 +61,12 @@ public class FantasyProsScraper implements RankingScraper {
     }
 
     @Override
-    public List<PlayerRanking> scrapeRankings() throws ScrapingException {
+    public List<PlayerRanking> scrapeRankings(int year) throws ScrapingException {
+        String url = String.format(RANKINGS_URL_TEMPLATE, year);
         try {
-            log.info("Fetching rankings from FantasyPros: {}", RANKINGS_URL);
+            log.info("Fetching rankings from FantasyPros: {}", url);
 
-            Document doc = Jsoup.connect(RANKINGS_URL)
+            Document doc = Jsoup.connect(url)
                     .userAgent(USER_AGENT)
                     .timeout(15_000)
                     .get();

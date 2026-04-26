@@ -59,9 +59,12 @@ public class SleeperScraper implements RankingScraper {
     }
 
     @Override
-    public List<PlayerRanking> scrapeRankings() throws ScrapingException {
+    public List<PlayerRanking> scrapeRankings(int year) throws ScrapingException {
+        // Note: Sleeper's /v1/players/nfl endpoint does not support year-based filtering.
+        // It always returns the current active player roster with search_rank.
+        // The year parameter is accepted for interface compliance but not used in the URL.
         try {
-            log.info("Fetching player data from Sleeper API: {}", API_URL);
+            log.info("Fetching player data from Sleeper API: {} (year param {} ignored — Sleeper returns current data)", API_URL, year);
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(API_URL))

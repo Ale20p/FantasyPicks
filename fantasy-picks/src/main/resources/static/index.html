@@ -69,6 +69,11 @@
                     <span class="status-label">Last Updated</span>
                     <span id="stat-last-updated" class="status-value">—</span>
                 </div>
+                <div class="status-divider"></div>
+                <div class="status-item">
+                    <span class="status-label">Season</span>
+                    <span id="stat-season" class="status-value">—</span>
+                </div>
             </div>
         </section>
 
@@ -93,6 +98,12 @@
                 <div class="search-box">
                     <svg class="search-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd"/></svg>
                     <input type="text" id="input-search" placeholder="Search players..." autocomplete="off">
+                </div>
+                <div class="filter-group">
+                    <label for="filter-year" class="filter-label">Season</label>
+                    <select id="filter-year" class="filter-select">
+                        <!-- Populated by JS -->
+                    </select>
                 </div>
                 <div class="filter-group">
                     <label for="filter-position" class="filter-label">Position</label>

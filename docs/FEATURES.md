@@ -4,7 +4,7 @@ Pick players based on overall consensus of the ranking for each player.
 # Features Required:
 1) Player data:
 	
-	1) Fetch players' data: Grab the ranking data for each player from all sources the user wants to use.
+	1) Fetch players' data: Grab the ranking data for each player from all sources the user wants to use when the user clicks on the fetch/update button.
 	
 	2) Data selection: The user needs to be able to select where they want the data to come from. For example, either from ESPN or Sleeper or both. Each source will have their own column for their respective ranking of the player. 
 	

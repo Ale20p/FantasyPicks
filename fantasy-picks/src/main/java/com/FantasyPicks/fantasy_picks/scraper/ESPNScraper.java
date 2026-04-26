@@ -12,7 +12,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.time.Year;
 import java.util.*;
 
 /**
@@ -90,19 +89,17 @@ public class ESPNScraper implements RankingScraper {
     }
 
     @Override
-    public List<PlayerRanking> scrapeRankings() throws ScrapingException {
-        int currentYear = Year.now().getValue();
-
-        // Try the current year first, fall back to the previous year if 404
-        List<PlayerRanking> result = tryFetchForSeason(currentYear);
+    public List<PlayerRanking> scrapeRankings(int year) throws ScrapingException {
+        // Try the requested year first, fall back to the previous year if 404
+        List<PlayerRanking> result = tryFetchForSeason(year);
         if (result != null) return result;
 
-        log.warn("ESPN: {} season data not available, trying {}", currentYear, currentYear - 1);
-        result = tryFetchForSeason(currentYear - 1);
+        log.warn("ESPN: {} season data not available, trying {}", year, year - 1);
+        result = tryFetchForSeason(year - 1);
         if (result != null) return result;
 
         throw new ScrapingException(SOURCE_ID,
-                "ESPN Fantasy API returned no data for " + currentYear + " or " + (currentYear - 1) +
+                "ESPN Fantasy API returned no data for " + year + " or " + (year - 1) +
                 ". The API may be unavailable during the off-season.");
     }
 

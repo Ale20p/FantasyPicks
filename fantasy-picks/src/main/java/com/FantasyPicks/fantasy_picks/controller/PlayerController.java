@@ -27,22 +27,29 @@ public class PlayerController {
     }
 
     /**
-     * GET /api/players?sources=fantasypros,espn,...
+     * GET /api/players?sources=fantasypros,espn,...&year=2026
      *
-     * Fetches player rankings from the specified sources, merges them,
-     * and returns the combined data with overall consensus rankings.
+     * Fetches player rankings from the specified sources for the given season year,
+     * merges them, and returns the combined data with overall consensus rankings.
      *
      * @param sources Comma-separated list of source IDs to scrape from
+     * @param year    The season year to fetch rankings for (defaults to current year)
      * @return PlayerApiResponse containing merged player data
      */
     @GetMapping("/players")
     public ResponseEntity<PlayerApiResponse> getPlayers(
-            @RequestParam(name = "sources", defaultValue = "fantasypros") String sources) {
+            @RequestParam(name = "sources", defaultValue = "fantasypros") String sources,
+            @RequestParam(name = "year", defaultValue = "0") int year) {
 
-        log.info("GET /api/players — sources={}", sources);
+        // Default to current year if not specified (or invalid)
+        if (year <= 0) {
+            year = java.time.Year.now().getValue();
+        }
+
+        log.info("GET /api/players — sources={}, year={}", sources, year);
 
         try {
-            PlayerApiResponse response = playerService.getPlayerRankings(sources);
+            PlayerApiResponse response = playerService.getPlayerRankings(sources, year);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {

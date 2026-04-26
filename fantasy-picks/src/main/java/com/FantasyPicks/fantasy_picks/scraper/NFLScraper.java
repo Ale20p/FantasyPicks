@@ -62,18 +62,16 @@ public class NFLScraper implements RankingScraper {
     }
 
     @Override
-    public List<PlayerRanking> scrapeRankings() throws ScrapingException {
-        int season = java.time.Year.now().getValue();
-
+    public List<PlayerRanking> scrapeRankings(int year) throws ScrapingException {
         // Try scraping per-position pages and merge
         List<PlayerRanking> allPlayers = new ArrayList<>();
 
         for (String position : POSITIONS) {
             try {
-                List<PlayerRanking> posPlayers = scrapePositionPage(position, season);
+                List<PlayerRanking> posPlayers = scrapePositionPage(position, year);
                 if (posPlayers.isEmpty()) {
                     // Try previous season
-                    posPlayers = scrapePositionPage(position, season - 1);
+                    posPlayers = scrapePositionPage(position, year - 1);
                 }
                 allPlayers.addAll(posPlayers);
             } catch (Exception e) {
@@ -84,9 +82,9 @@ public class NFLScraper implements RankingScraper {
 
         if (allPlayers.isEmpty()) {
             // Fallback: try the overall rankings page
-            allPlayers = scrapeOverallPage(season);
+            allPlayers = scrapeOverallPage(year);
             if (allPlayers.isEmpty()) {
-                allPlayers = scrapeOverallPage(season - 1);
+                allPlayers = scrapeOverallPage(year - 1);
             }
         }
 

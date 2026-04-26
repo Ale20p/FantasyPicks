@@ -70,7 +70,10 @@ public class YahooScraper implements RankingScraper {
     }
 
     @Override
-    public List<PlayerRanking> scrapeRankings() throws ScrapingException {
+    public List<PlayerRanking> scrapeRankings(int year) throws ScrapingException {
+        // Note: Yahoo's draft analysis page does not support year-based querying via URL params.
+        // The year parameter is accepted for interface compliance.
+        log.info("Yahoo: requested year={} (Yahoo ADP page does not support year filtering)", year);
         // Try the draft analysis page first
         List<PlayerRanking> players = tryDraftAnalysisPage();
         if (players != null && !players.isEmpty()) {

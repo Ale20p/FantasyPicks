@@ -42,20 +42,21 @@ public class PlayerService {
     }
 
     /**
-     * Fetch player rankings from the requested sources, merge them,
-     * compute overall rank, and return the API response.
+     * Fetch player rankings from the requested sources for a specific season year,
+     * merge them, compute overall rank, and return the API response.
      *
      * @param requestedSources Comma-separated source IDs (e.g. "fantasypros,espn")
+     * @param year The season year to fetch rankings for (e.g. 2025, 2026)
      * @return PlayerApiResponse ready to be serialized to JSON
      */
-    public PlayerApiResponse getPlayerRankings(String requestedSources) {
+    public PlayerApiResponse getPlayerRankings(String requestedSources, int year) {
         // Parse the requested source IDs
         Set<String> sourceIds = Arrays.stream(requestedSources.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        log.info("Fetching rankings from sources: {}", sourceIds);
+        log.info("Fetching rankings from sources: {} for year: {}", sourceIds, year);
 
         // Scrape each requested source
         // Key = "playerName|team" for deduplication, Value = merged PlayerRanking
@@ -69,7 +70,7 @@ public class PlayerService {
             }
 
             try {
-                List<PlayerRanking> scraped = scraper.scrapeRankings();
+                List<PlayerRanking> scraped = scraper.scrapeRankings(year);
                 log.info("Source '{}' returned {} players", sourceId, scraped.size());
 
                 for (PlayerRanking player : scraped) {

@@ -29,6 +29,7 @@ const NFL_TEAMS = [
 // ── STATE ─────────────────────────────────────────────────────
 let state = {
     selectedSources: new Set(),
+    selectedYear: new Date().getFullYear(),
     players: [],
     filteredPlayers: [],
     sortColumn: 'overallRank',
@@ -46,6 +47,7 @@ const $$ = (sel) => document.querySelectorAll(sel);
 const dom = {
     sourceCards:     $('#source-cards'),
     searchInput:     $('#input-search'),
+    filterYear:      $('#filter-year'),
     filterPosition:  $('#filter-position'),
     filterTeam:      $('#filter-team'),
     tableHeaderRow:  $('#table-header-row'),
@@ -59,6 +61,7 @@ const dom = {
     statPlayerCount: $('#stat-player-count'),
     statSourceCount: $('#stat-source-count'),
     statLastUpdated: $('#stat-last-updated'),
+    statSeason:      $('#stat-season'),
     toastContainer:  $('#toast-container'),
 };
 
@@ -67,6 +70,7 @@ const dom = {
 // ═══════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
     renderSourceCards();
+    populateYearFilter();
     populateTeamFilter();
     bindEvents();
     updateUIState();
@@ -121,6 +125,26 @@ function populateTeamFilter() {
     dom.filterTeam.appendChild(frag);
 }
 
+/**
+ * Populate the year/season dropdown with years from 2020 to the current year.
+ * The current year is selected by default.
+ */
+function populateYearFilter() {
+    const currentYear = new Date().getFullYear();
+    const startYear = 2020;
+    const frag = document.createDocumentFragment();
+
+    for (let y = currentYear; y >= startYear; y--) {
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.textContent = `${y} Season`;
+        if (y === currentYear) opt.selected = true;
+        frag.appendChild(opt);
+    }
+    dom.filterYear.appendChild(frag);
+    state.selectedYear = currentYear;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // EVENTS
 // ═══════════════════════════════════════════════════════════════
@@ -157,6 +181,15 @@ function bindEvents() {
         state.filterTeam = dom.filterTeam.value;
         applyFilters();
         renderTable();
+    });
+
+    // Year filter — changing the year triggers a new data fetch
+    dom.filterYear.addEventListener('change', () => {
+        state.selectedYear = parseInt(dom.filterYear.value, 10);
+        // If we already have data loaded, auto-refresh with the new year
+        if (state.selectedSources.size > 0 && state.players.length > 0) {
+            fetchPlayerData();
+        }
     });
 
     // Table header sort clicks
@@ -201,7 +234,8 @@ async function fetchPlayerData() {
 
     try {
         const sourcesParam = [...state.selectedSources].join(',');
-        const response = await fetch(`${API_BASE}/api/players?sources=${encodeURIComponent(sourcesParam)}`);
+        const yearParam = state.selectedYear || new Date().getFullYear();
+        const response = await fetch(`${API_BASE}/api/players?sources=${encodeURIComponent(sourcesParam)}&year=${yearParam}`);
 
         if (!response.ok) {
             throw new Error(`Server responded with ${response.status}`);
@@ -235,7 +269,7 @@ async function fetchPlayerData() {
         renderTable();
         updateStats(data);
 
-        showToast(`Loaded ${state.players.length} players from ${state.selectedSources.size} source(s).`, 'success');
+        showToast(`Loaded ${state.players.length} players from ${state.selectedSources.size} source(s) for ${state.selectedYear} season.`, 'success');
     } catch (err) {
         console.error('Failed to fetch player data:', err);
         showError(err.message || 'Could not load player data.');
@@ -378,6 +412,7 @@ function updateUIState() {
     dom.statPlayerCount.textContent = state.players.length || '—';
     dom.statSourceCount.textContent = state.selectedSources.size || '—';
     dom.statLastUpdated.textContent = '—';
+    dom.statSeason.textContent = state.selectedYear;
     renderTable();
 }
 
@@ -399,6 +434,7 @@ function setLoading(isLoading) {
 function updateStats(data) {
     dom.statPlayerCount.textContent = state.players.length;
     dom.statSourceCount.textContent = state.selectedSources.size;
+    dom.statSeason.textContent = state.selectedYear;
 
     if (data.lastUpdated) {
         const d = new Date(data.lastUpdated);
