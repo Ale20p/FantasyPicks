@@ -1,0 +1,1 @@
+Currently there is no year selection button. As a result some sources only have last years data/rankings because it might be too early in the year to have the new season's data, so we are getting scewed results. We should add a year selection button that allows the user to select the year for which they want to get the rankings for.
