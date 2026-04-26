@@ -2,6 +2,7 @@ package com.FantasyPicks.fantasy_picks.service;
 
 import com.FantasyPicks.fantasy_picks.model.PlayerApiResponse;
 import com.FantasyPicks.fantasy_picks.model.PlayerRanking;
+import com.FantasyPicks.fantasy_picks.normalization.PlayerNormalizer;
 import com.FantasyPicks.fantasy_picks.scraper.RankingScraper;
 import com.FantasyPicks.fantasy_picks.scraper.ScrapingException;
 import org.slf4j.Logger;
@@ -14,6 +15,10 @@ import java.util.stream.Collectors;
 /**
  * Orchestrates scraping from multiple sources, merges player data,
  * and computes the overall consensus ranking.
+ *
+ * Uses {@link PlayerNormalizer} to ensure that the same real-world player
+ * is always merged into a single entry regardless of how each source
+ * formats their name or team abbreviation.
  */
 @Service
 public class PlayerService {
@@ -26,7 +31,11 @@ public class PlayerService {
      */
     private final Map<String, RankingScraper> scraperMap;
 
-    public PlayerService(List<RankingScraper> scrapers) {
+    /** Normalizes player names and team abbreviations for cross-source deduplication. */
+    private final PlayerNormalizer normalizer;
+
+    public PlayerService(List<RankingScraper> scrapers, PlayerNormalizer normalizer) {
+        this.normalizer = normalizer;
         this.scraperMap = new LinkedHashMap<>();
         for (RankingScraper scraper : scrapers) {
             scraperMap.put(scraper.getSourceId(), scraper);
@@ -59,7 +68,7 @@ public class PlayerService {
         log.info("Fetching rankings from sources: {} for year: {}", sourceIds, year);
 
         // Scrape each requested source
-        // Key = "playerName|team" for deduplication, Value = merged PlayerRanking
+        // Key = normalized "playerName|team" for deduplication, Value = merged PlayerRanking
         Map<String, PlayerRanking> mergedPlayers = new LinkedHashMap<>();
 
         for (String sourceId : sourceIds) {
@@ -74,7 +83,11 @@ public class PlayerService {
                 log.info("Source '{}' returned {} players", sourceId, scraped.size());
 
                 for (PlayerRanking player : scraped) {
-                    String key = buildPlayerKey(player);
+                    // Normalize team abbreviation on the display model too
+                    player.setTeam(normalizer.normalizeTeam(player.getTeam()));
+
+                    // Build normalized key for deduplication
+                    String key = normalizer.buildNormalizedKey(player.getName(), player.getTeam());
                     PlayerRanking existing = mergedPlayers.get(key);
 
                     if (existing == null) {
@@ -131,16 +144,6 @@ public class PlayerService {
         for (int i = 0; i < scored.size(); i++) {
             scored.get(i).player.setOverallRank(i + 1);
         }
-    }
-
-    /**
-     * Build a deduplication key for a player.
-     * Uses name + team to handle players with the same name on different teams.
-     */
-    private String buildPlayerKey(PlayerRanking player) {
-        String name = player.getName() == null ? "" : player.getName().toLowerCase().trim();
-        String team = player.getTeam() == null ? "" : player.getTeam().toLowerCase().trim();
-        return name + "|" + team;
     }
 
     /**

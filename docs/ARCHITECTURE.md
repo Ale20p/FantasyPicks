@@ -16,6 +16,15 @@ Data Sources:
 - FantasyPros
 - CBS Sports
 
+Normalization Layer:
+- will be used to normalize the data from the different sources
+- will be used to combine the data from the different sources
+- Team Normalization: Create a standardized mapping for NFL teams (e.g., "Kansas City Chiefs", "KC", and "Chiefs" all map to "KC"). This ensures the team part of the key is always identical across sources.
+- Name Normalization: Implement a "fuzzy" cleaning process that:
+    
+    - Removes suffixes (Jr., Sr., II, III).
+    - Removes special characters (periods, apostrophes).
+    - Standardizes common nicknames (e.g., "Mitch Trubisky" vs "Mitchell Trubisky").
 
 ## Database
 Tech: PostgreSQL
