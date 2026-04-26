@@ -8,6 +8,15 @@ For scraping data:
 - Jsoup (Static Sites)
 - Playwright (Dynamic/JS Sites)
 
+Data Sources:
+- Yahoo Fantasy
+- Sleeper
+- ESPN
+- NFL.com
+- FantasyPros
+- CBS Sports
+
+
 ## Database
 Tech: PostgreSQL
 - will be used to store players' data
