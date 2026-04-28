@@ -26,6 +26,10 @@ Pick players based on overall consensus of the ranking for each player.
 		4) Team ticker
 			
 			Rest of columns: Rankings of the respective player from the respective sources. 
+
+3) Drafting features:
+	
+	1) Player selected toggle: If a player is chosen, then the user clicks on the checkbox that should be to the left of the Rank column (the checkbox should be in the leftmost column) the row of the corresponding player turns gray. 
 	
 	
 	

@@ -18,13 +18,14 @@ import java.util.*;
  * Scrapes player rankings from the Sleeper public API.
  *
  * Strategy:
- *   1. Hit the public /v1/players/nfl endpoint (returns all NFL players as a JSON object)
- *   2. Filter for fantasy-relevant, active, rostered players
- *   3. Sort by Sleeper's built-in "search_rank" field (lower = better)
- *   4. Re-number sequentially to produce a clean 1..N ranking
+ * 1. Hit the public /v1/players/nfl endpoint (returns all NFL players as a JSON
+ * object)
+ * 2. Filter for fantasy-relevant, active, rostered players
+ * 3. Sort by Sleeper's built-in "search_rank" field (lower = better)
+ * 4. Re-number sequentially to produce a clean 1..N ranking
  *
  * Note: The response is large (~14 MB) containing ~10,000+ player entries.
- *       Only fantasy-relevant positions on active rosters are kept.
+ * Only fantasy-relevant positions on active rosters are kept.
  */
 @Component
 public class SleeperScraper implements RankingScraper {
@@ -36,8 +37,7 @@ public class SleeperScraper implements RankingScraper {
     private static final String API_URL = "https://api.sleeper.app/v1/players/nfl";
 
     /** Fantasy-relevant positions to keep */
-    private static final Set<String> FANTASY_POSITIONS =
-            Set.of("QB", "RB", "WR", "TE", "K", "PK", "DEF");
+    private static final Set<String> FANTASY_POSITIONS = Set.of("QB", "RB", "WR", "TE", "K", "PK", "DEF");
 
     /** Ignore players with search_rank at or above this threshold */
     private static final int MAX_SEARCH_RANK = 500;
@@ -60,15 +60,18 @@ public class SleeperScraper implements RankingScraper {
 
     @Override
     public List<PlayerRanking> scrapeRankings(int year) throws ScrapingException {
-        // Note: Sleeper's /v1/players/nfl endpoint does not support year-based filtering.
+        // Note: Sleeper's /v1/players/nfl endpoint does not support year-based
+        // filtering.
         // It always returns the current active player roster with search_rank.
-        // The year parameter is accepted for interface compliance but not used in the URL.
+        // The year parameter is accepted for interface compliance but not used in the
+        // URL.
         try {
-            log.info("Fetching player data from Sleeper API: {} (year param {} ignored — Sleeper returns current data)", API_URL, year);
+            log.info("Fetching player data from Sleeper API: {} (year param {} ignored — Sleeper returns current data)",
+                    API_URL, year);
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(API_URL))
-                    .timeout(Duration.ofSeconds(45))  // Large response needs time
+                    .timeout(Duration.ofSeconds(45)) // Large response needs time
                     .header("Accept", "application/json")
                     .header("User-Agent", "FantasyPicks/1.0")
                     .GET()
@@ -124,19 +127,23 @@ public class SleeperScraper implements RankingScraper {
 
     private PlayerRanking parsePlayer(JsonNode node) {
         // Must be active
-        if (!node.path("active").asBoolean(false)) return null;
+        if (!node.path("active").asBoolean(false))
+            return null;
 
         // Determine position
         String position = resolvePosition(node);
-        if (position == null || !FANTASY_POSITIONS.contains(position)) return null;
+        if (position == null || !FANTASY_POSITIONS.contains(position))
+            return null;
 
         // Must be on a team
         String team = node.path("team").asText("");
-        if (team.isEmpty() || "null".equals(team)) return null;
+        if (team.isEmpty() || "null".equals(team))
+            return null;
 
         // Must have a reasonable search_rank
         int searchRank = node.path("search_rank").asInt(Integer.MAX_VALUE);
-        if (searchRank >= MAX_SEARCH_RANK) return null;
+        if (searchRank >= MAX_SEARCH_RANK)
+            return null;
 
         // Must have a name
         String fullName = node.path("full_name").asText("");
@@ -145,14 +152,14 @@ public class SleeperScraper implements RankingScraper {
             String firstName = node.path("first_name").asText("");
             String lastName = node.path("last_name").asText("");
             fullName = (firstName + " " + lastName).trim();
-            if (fullName.isBlank()) return null;
+            if (fullName.isBlank())
+                return null;
         }
 
         PlayerRanking ranking = new PlayerRanking(
                 fullName,
                 normalizePosition(position),
-                team.toUpperCase()
-        );
+                team.toUpperCase());
         // Store raw search_rank initially; will be re-numbered after sorting
         ranking.addSourceRanking(SOURCE_ID, searchRank);
         return ranking;
@@ -166,14 +173,16 @@ public class SleeperScraper implements RankingScraper {
         JsonNode fantasyPos = node.path("fantasy_positions");
         if (fantasyPos.isArray() && !fantasyPos.isEmpty()) {
             String pos = fantasyPos.get(0).asText("").toUpperCase();
-            if (!pos.isEmpty()) return pos;
+            if (!pos.isEmpty())
+                return pos;
         }
         String pos = node.path("position").asText("");
         return pos.isEmpty() ? null : pos.toUpperCase();
     }
 
     private String normalizePosition(String position) {
-        if (position == null) return "";
+        if (position == null)
+            return "";
         return switch (position.toUpperCase()) {
             case "QB", "QUARTERBACK" -> "QB";
             case "RB", "RUNNING BACK", "HB" -> "RB";

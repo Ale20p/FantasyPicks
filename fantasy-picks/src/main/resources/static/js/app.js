@@ -32,6 +32,7 @@ let state = {
     selectedYear: new Date().getFullYear(),
     players: [],
     filteredPlayers: [],
+    draftedPlayers: new Set(),
     sortColumn: 'overallRank',
     sortDir: 'asc',
     searchQuery: '',
@@ -189,6 +190,20 @@ function bindEvents() {
         // If we already have data loaded, auto-refresh with the new year
         if (state.selectedSources.size > 0 && state.players.length > 0) {
             fetchPlayerData();
+        }
+    });
+
+    // Draft checkbox clicks
+    dom.tableBody.addEventListener('change', (e) => {
+        if (e.target.classList.contains('draft-checkbox')) {
+            const playerName = e.target.dataset.playerName;
+            if (e.target.checked) {
+                state.draftedPlayers.add(playerName);
+                e.target.closest('tr').classList.add('row-drafted');
+            } else {
+                state.draftedPlayers.delete(playerName);
+                e.target.closest('tr').classList.remove('row-drafted');
+            }
         }
     });
 
@@ -384,8 +399,11 @@ function renderTable() {
             return `<td class="source-rank-cell">${rank != null ? rank : '—'}</td>`;
         }).join('');
 
+        const isDrafted = state.draftedPlayers.has(player.name);
+
         return `
-            <tr>
+            <tr class="${isDrafted ? 'row-drafted' : ''}">
+                <td class="draft-cell"><input type="checkbox" class="draft-checkbox" data-player-name="${escapeHTML(player.name)}" ${isDrafted ? 'checked' : ''}></td>
                 <td class="rank-cell">${player.overallRank ?? (idx + 1)}</td>
                 <td class="col-player">${escapeHTML(player.name)}</td>
                 <td class="col-pos"><span class="badge-pos ${player.position}">${player.position}</span></td>

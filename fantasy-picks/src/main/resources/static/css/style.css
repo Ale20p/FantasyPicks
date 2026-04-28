@@ -574,7 +574,19 @@ img { max-width: 100%; display: block; }
     background: var(--clr-surface-hover);
 }
 
+/* Drafted player row */
+#rankings-table tbody tr.row-drafted {
+    background: var(--clr-surface-raised);
+    opacity: 0.5;
+    filter: grayscale(100%);
+}
+
+#rankings-table tbody tr.row-drafted:hover {
+    background: var(--clr-border);
+}
+
 /* Column widths */
+.col-draft   { width: 50px; text-align: center; }
 .col-rank    { width: 60px; text-align: center; }
 .col-player  { min-width: 180px; }
 .col-pos     { width: 60px; text-align: center; }
@@ -621,6 +633,10 @@ img { max-width: 100%; display: block; }
     text-align: center;
     font-weight: 600;
     color: var(--clr-text-secondary);
+}
+
+.draft-cell {
+    text-align: center;
 }
 
 /* ═══════════════════════════════════════════════════════
