@@ -62,7 +62,7 @@ public class NFLScraper implements RankingScraper {
     }
 
     @Override
-    public List<PlayerRanking> scrapeRankings(int year) throws ScrapingException {
+    public List<PlayerRanking> scrapeRankings(int year, String leagueType) throws ScrapingException {
         // Try scraping per-position pages and merge
         List<PlayerRanking> allPlayers = new ArrayList<>();
 

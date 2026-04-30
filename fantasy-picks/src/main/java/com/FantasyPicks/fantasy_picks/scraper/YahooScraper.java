@@ -19,9 +19,9 @@ import java.util.regex.Pattern;
  * Scrapes player ADP (Average Draft Position) from Yahoo Fantasy Football.
  *
  * Strategy:
- *   1. Fetch Yahoo's public draft analysis page at
- *      football.fantasysports.yahoo.com/f1/draftanalysis
- *   2. Parse the HTML table for player name, position, team, and ADP ranking
+ * 1. Fetch Yahoo's public draft analysis page at
+ * football.fantasysports.yahoo.com/f1/draftanalysis
+ * 2. Parse the HTML table for player name, position, team, and ADP ranking
  *
  * Yahoo's draft analysis page shows Average Draft Position (ADP) data
  * which serves as Yahoo's effective player ranking. The data is partially
@@ -34,7 +34,7 @@ import java.util.regex.Pattern;
  * server-rendered.
  *
  * Note: Yahoo's fantasy pages may require authentication for full access.
- *       If scraping fails, the error is reported gracefully.
+ * If scraping fails, the error is reported gracefully.
  */
 @Component
 public class YahooScraper implements RankingScraper {
@@ -45,18 +45,17 @@ public class YahooScraper implements RankingScraper {
     private static final String SOURCE_NAME = "Yahoo";
 
     /** Yahoo draft analysis — ADP data */
-    private static final String DRAFT_ANALYSIS_URL =
-            "https://football.fantasysports.yahoo.com/f1/draftanalysis?pos=ALL&sort=DA_AP";
+    private static final String DRAFT_ANALYSIS_URL = "https://football.fantasysports.yahoo.com/f1/draftanalysis?pos=ALL&sort=DA_AP";
 
     /**
      * Regex to parse player entries from Yahoo's page.
-     * Matches patterns like "Player Name (TEAM - POS)" which Yahoo uses in tooltips.
+     * Matches patterns like "Player Name (TEAM - POS)" which Yahoo uses in
+     * tooltips.
      */
-    private static final Pattern PLAYER_PATTERN =
-            Pattern.compile("([A-Za-z'.\\-\\s]+?)\\s*\\(([A-Z]{2,4})\\s*-\\s*(QB|RB|WR|TE|K|DEF)\\)");
+    private static final Pattern PLAYER_PATTERN = Pattern
+            .compile("([A-Za-z'.\\-\\s]+?)\\s*\\(([A-Z]{2,4})\\s*-\\s*(QB|RB|WR|TE|K|DEF)\\)");
 
-    private static final String USER_AGENT =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+    private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
 
     @Override
@@ -70,8 +69,9 @@ public class YahooScraper implements RankingScraper {
     }
 
     @Override
-    public List<PlayerRanking> scrapeRankings(int year) throws ScrapingException {
-        // Note: Yahoo's draft analysis page does not support year-based querying via URL params.
+    public List<PlayerRanking> scrapeRankings(int year, String leagueType) throws ScrapingException {
+        // Note: Yahoo's draft analysis page does not support year-based querying via
+        // URL params.
         // The year parameter is accepted for interface compliance.
         log.info("Yahoo: requested year={} (Yahoo ADP page does not support year filtering)", year);
         // Try the draft analysis page first
@@ -88,9 +88,9 @@ public class YahooScraper implements RankingScraper {
 
         throw new ScrapingException(SOURCE_ID,
                 "Yahoo Fantasy rankings require JavaScript rendering or authentication. " +
-                "The draft analysis page at football.fantasysports.yahoo.com/f1/draftanalysis " +
-                "does not serve its ADP table in server-rendered HTML. " +
-                "Consider implementing Playwright support for this source.");
+                        "The draft analysis page at football.fantasysports.yahoo.com/f1/draftanalysis " +
+                        "does not serve its ADP table in server-rendered HTML. " +
+                        "Consider implementing Playwright support for this source.");
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -118,15 +118,18 @@ public class YahooScraper implements RankingScraper {
 
             // Strategy 1: Parse the standard ADP table
             List<PlayerRanking> players = parseAdpTable(doc);
-            if (!players.isEmpty()) return players;
+            if (!players.isEmpty())
+                return players;
 
             // Strategy 2: Look for player data in any table on the page
             players = parseAnyPlayerTable(doc);
-            if (!players.isEmpty()) return players;
+            if (!players.isEmpty())
+                return players;
 
             // Strategy 3: Extract from structured data / links
             players = extractFromPlayerLinks(doc);
-            if (!players.isEmpty()) return players;
+            if (!players.isEmpty())
+                return players;
 
             return null;
 
@@ -142,25 +145,31 @@ public class YahooScraper implements RankingScraper {
 
     /**
      * Strategy 1: Parse Yahoo's standard ADP table.
-     * Expected columns: Rank | Player (with team/pos info) | ADP | Avg Round | % Drafted
+     * Expected columns: Rank | Player (with team/pos info) | ADP | Avg Round | %
+     * Drafted
      */
     private List<PlayerRanking> parseAdpTable(Document doc) {
         List<PlayerRanking> results = new ArrayList<>();
 
         // Try known table selectors
         Elements rows = doc.select("table#draftanalysistable tbody tr");
-        if (rows.isEmpty()) rows = doc.select("table.Table tbody tr");
-        if (rows.isEmpty()) rows = doc.select("#draftanalysis table tbody tr");
-        if (rows.isEmpty()) rows = doc.select("section table tbody tr");
+        if (rows.isEmpty())
+            rows = doc.select("table.Table tbody tr");
+        if (rows.isEmpty())
+            rows = doc.select("#draftanalysis table tbody tr");
+        if (rows.isEmpty())
+            rows = doc.select("section table tbody tr");
 
         int rank = 1;
         for (Element row : rows) {
             Elements cells = row.select("td");
-            if (cells.size() < 2) continue;
+            if (cells.size() < 2)
+                continue;
 
             // Look for player name + team/position in the row
             PlayerInfo info = extractPlayerInfo(row);
-            if (info == null) continue;
+            if (info == null)
+                continue;
 
             PlayerRanking ranking = new PlayerRanking(info.name, info.position, info.team);
             ranking.addSourceRanking(SOURCE_ID, rank);
@@ -184,7 +193,8 @@ public class YahooScraper implements RankingScraper {
 
             for (Element row : rows) {
                 PlayerInfo info = extractPlayerInfo(row);
-                if (info != null) playerCount++;
+                if (info != null)
+                    playerCount++;
             }
 
             // If this table has a significant number of player entries, parse it fully
@@ -192,7 +202,8 @@ public class YahooScraper implements RankingScraper {
                 int rank = 1;
                 for (Element row : rows) {
                     PlayerInfo info = extractPlayerInfo(row);
-                    if (info == null) continue;
+                    if (info == null)
+                        continue;
 
                     PlayerRanking ranking = new PlayerRanking(info.name, info.position, info.team);
                     ranking.addSourceRanking(SOURCE_ID, rank);
@@ -253,10 +264,12 @@ public class YahooScraper implements RankingScraper {
         if (nameLink == null) {
             nameLink = row.selectFirst("a");
         }
-        if (nameLink == null) return null;
+        if (nameLink == null)
+            return null;
 
         String name = nameLink.text().trim();
-        if (name.length() < 3) return null;
+        if (name.length() < 3)
+            return null;
 
         // Look for team and position
         String team = "FA";
@@ -278,12 +291,14 @@ public class YahooScraper implements RankingScraper {
             Element posEl = row.selectFirst("td.Pos, span.pos, td:nth-child(3)");
             if (posEl != null) {
                 String posText = posEl.text().trim().toUpperCase();
-                if (isPosition(posText)) position = normalizePosition(posText);
+                if (isPosition(posText))
+                    position = normalizePosition(posText);
             }
         }
 
         // Must have at least a name to be valid
-        if (name.isBlank()) return null;
+        if (name.isBlank())
+            return null;
 
         return new PlayerInfo(name, team, position);
     }
@@ -296,7 +311,8 @@ public class YahooScraper implements RankingScraper {
     }
 
     private String normalizePosition(String position) {
-        if (position == null) return "";
+        if (position == null)
+            return "";
         return switch (position.toUpperCase()) {
             case "QB", "QUARTERBACK" -> "QB";
             case "RB", "RUNNING BACK", "HB" -> "RB";

@@ -25,11 +25,12 @@ public interface RankingScraper {
      * Scrape player rankings from this source for a specific season year.
      *
      * @param year The season year to fetch rankings for (e.g. 2025, 2026)
+     * @param leagueType The type of league (standard, ppr, half_ppr, superflex)
      * @return A list of PlayerRanking objects. Each object should have:
      *         - name, position, team populated
      *         - a single entry in the rankings map for this source
      *         The overallRank is computed later by PlayerService after merging all sources.
      * @throws ScrapingException if the scraping operation fails
      */
-    List<PlayerRanking> scrapeRankings(int year) throws ScrapingException;
+    List<PlayerRanking> scrapeRankings(int year, String leagueType) throws ScrapingException;
 }

@@ -11,10 +11,7 @@ const API_BASE = '';  // Same-origin — Spring Boot serves both the API and sta
 
 // Available data sources (mirrors what the backend will support)
 const DATA_SOURCES = [
-    { id: 'espn',       name: 'ESPN',           desc: 'ESPN Fantasy Football rankings and projections.' },
     { id: 'sleeper',    name: 'Sleeper',        desc: 'Sleeper app consensus rankings.' },
-    { id: 'yahoo',      name: 'Yahoo',          desc: 'Yahoo Fantasy expert rankings.' },
-    { id: 'nfl',        name: 'NFL.com',        desc: 'Official NFL Fantasy player rankings.' },
     { id: 'fantasypros', name: 'FantasyPros',   desc: 'FantasyPros expert consensus rankings (ECR).' },
 ];
 
@@ -38,6 +35,7 @@ let state = {
     searchQuery: '',
     filterPosition: 'ALL',
     filterTeam: 'ALL',
+    filterLeagueType: 'standard',
     isLoading: false,
 };
 
@@ -49,6 +47,7 @@ const dom = {
     sourceCards:     $('#source-cards'),
     searchInput:     $('#input-search'),
     filterYear:      $('#filter-year'),
+    filterLeagueType:$('#filter-league-type'),
     filterPosition:  $('#filter-position'),
     filterTeam:      $('#filter-team'),
     tableHeaderRow:  $('#table-header-row'),
@@ -193,6 +192,14 @@ function bindEvents() {
         }
     });
 
+    // League type filter — triggers a new data fetch
+    dom.filterLeagueType.addEventListener('change', () => {
+        state.filterLeagueType = dom.filterLeagueType.value;
+        if (state.selectedSources.size > 0 && state.players.length > 0) {
+            fetchPlayerData();
+        }
+    });
+
     // Draft checkbox clicks
     dom.tableBody.addEventListener('change', (e) => {
         if (e.target.classList.contains('draft-checkbox')) {
@@ -250,7 +257,8 @@ async function fetchPlayerData() {
     try {
         const sourcesParam = [...state.selectedSources].join(',');
         const yearParam = state.selectedYear || new Date().getFullYear();
-        const response = await fetch(`${API_BASE}/api/players?sources=${encodeURIComponent(sourcesParam)}&year=${yearParam}`);
+        const leagueTypeParam = state.filterLeagueType || 'standard';
+        const response = await fetch(`${API_BASE}/api/players?sources=${encodeURIComponent(sourcesParam)}&year=${yearParam}&leagueType=${encodeURIComponent(leagueTypeParam)}`);
 
         if (!response.ok) {
             throw new Error(`Server responded with ${response.status}`);

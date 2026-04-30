@@ -59,8 +59,9 @@ public class SleeperScraper implements RankingScraper {
     }
 
     @Override
-    public List<PlayerRanking> scrapeRankings(int year) throws ScrapingException {
+    public List<PlayerRanking> scrapeRankings(int year, String leagueType) throws ScrapingException {
         // Note: Sleeper's /v1/players/nfl endpoint does not support year-based
+        // or league-type based filtering.
         // filtering.
         // It always returns the current active player roster with search_rank.
         // The year parameter is accepted for interface compliance but not used in the

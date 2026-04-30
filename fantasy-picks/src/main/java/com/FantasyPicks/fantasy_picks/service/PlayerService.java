@@ -58,14 +58,14 @@ public class PlayerService {
      * @param year The season year to fetch rankings for (e.g. 2025, 2026)
      * @return PlayerApiResponse ready to be serialized to JSON
      */
-    public PlayerApiResponse getPlayerRankings(String requestedSources, int year) {
+    public PlayerApiResponse getPlayerRankings(String requestedSources, int year, String leagueType) {
         // Parse the requested source IDs
         Set<String> sourceIds = Arrays.stream(requestedSources.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        log.info("Fetching rankings from sources: {} for year: {}", sourceIds, year);
+        log.info("Fetching rankings from sources: {} for year: {}, leagueType: {}", sourceIds, year, leagueType);
 
         // Scrape each requested source
         // Key = normalized "playerName|team" for deduplication, Value = merged PlayerRanking
@@ -79,7 +79,7 @@ public class PlayerService {
             }
 
             try {
-                List<PlayerRanking> scraped = scraper.scrapeRankings(year);
+                List<PlayerRanking> scraped = scraper.scrapeRankings(year, leagueType);
                 log.info("Source '{}' returned {} players", sourceId, scraped.size());
 
                 for (PlayerRanking player : scraped) {

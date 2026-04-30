@@ -14,15 +14,16 @@ class ESPNScraperTest {
     @Test
     void testScrapeRankings() throws Exception {
         ESPNScraper scraper = new ESPNScraper();
-        List<PlayerRanking> rankings = scraper.scrapeRankings(2025);
-        
+        List<PlayerRanking> rankings = scraper.scrapeRankings(2025, "PPR");
+
         assertNotNull(rankings, "Rankings should not be null");
         assertFalse(rankings.isEmpty(), "Rankings should not be empty");
-        
+
         System.out.println("Fetched " + rankings.size() + " players from ESPN.");
         for (int i = 0; i < Math.min(5, rankings.size()); i++) {
             PlayerRanking p = rankings.get(i);
-            System.out.println(p.getName() + " - " + p.getPosition() + " - " + p.getTeam() + " (Rank: " + p.getRankings().get("espn") + ")");
+            System.out.println(p.getName() + " - " + p.getPosition() + " - " + p.getTeam() + " (Rank: "
+                    + p.getRankings().get("espn") + ")");
         }
     }
 }

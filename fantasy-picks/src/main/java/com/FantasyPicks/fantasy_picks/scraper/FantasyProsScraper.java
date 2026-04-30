@@ -33,8 +33,17 @@ public class FantasyProsScraper implements RankingScraper {
 
     private static final String SOURCE_ID = "fantasypros";
     private static final String SOURCE_NAME = "FantasyPros";
-    private static final String RANKINGS_URL_TEMPLATE =
-            "https://www.fantasypros.com/nfl/rankings/consensus-cheatsheets.php?year=%d";
+    private static final String RANKINGS_BASE_URL = "https://www.fantasypros.com/nfl/rankings/";
+
+    private String getEndpointForLeagueType(String leagueType) {
+        if (leagueType == null) return "consensus-cheatsheets.php";
+        return switch (leagueType.toLowerCase()) {
+            case "ppr" -> "ppr-cheatsheets.php";
+            case "half_ppr" -> "half-point-ppr-cheatsheets.php";
+            case "superflex" -> "superflex-cheatsheets.php";
+            default -> "consensus-cheatsheets.php";
+        };
+    }
 
     /**
      * Regex to extract the ecrData JSON object from the page's JavaScript.
@@ -61,8 +70,9 @@ public class FantasyProsScraper implements RankingScraper {
     }
 
     @Override
-    public List<PlayerRanking> scrapeRankings(int year) throws ScrapingException {
-        String url = String.format(RANKINGS_URL_TEMPLATE, year);
+    public List<PlayerRanking> scrapeRankings(int year, String leagueType) throws ScrapingException {
+        String endpoint = getEndpointForLeagueType(leagueType);
+        String url = String.format("%s%s?year=%d", RANKINGS_BASE_URL, endpoint, year);
         try {
             log.info("Fetching rankings from FantasyPros: {}", url);
 
