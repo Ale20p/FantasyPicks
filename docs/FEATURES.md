@@ -14,7 +14,11 @@ Pick players based on overall consensus of the ranking for each player.
 		- If year is that of the current year/upcoming season then the application checks to find the most recent data.
 		- If year is that of a season that has already pasted, then data is loaded from database since the season is already finished and there are no updates to that data. So if season has passed then that season's data should be in the database as a one and done. 
 
-	5) League Type: Users can select what type of league they are drafting for. Which results in the corresponding data being scraped from the sources selected. 
+	5) League Type: Users can select what type of league they are drafting for. Which results in the corresponding data being scraped from the sources selected. League types: 
+		- 1 PPR
+		- 0.5 PPR
+		- Non-PPR
+		- Standard
 
 2) Showcasing data:
 	

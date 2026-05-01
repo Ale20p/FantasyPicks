@@ -13,6 +13,7 @@ const API_BASE = '';  // Same-origin — Spring Boot serves both the API and sta
 const DATA_SOURCES = [
     { id: 'sleeper',    name: 'Sleeper',        desc: 'Sleeper app consensus rankings.' },
     { id: 'fantasypros', name: 'FantasyPros',   desc: 'FantasyPros expert consensus rankings (ECR).' },
+    { id: 'draftsharks', name: 'DraftSharks',   desc: 'DraftSharks award-winning projections and rankings.' },
 ];
 
 // NFL Teams for the team filter dropdown

@@ -1,38 +1,25 @@
 package com.FantasyPicks.fantasy_picks.scraper;
 
 import com.FantasyPicks.fantasy_picks.model.PlayerRanking;
-import com.microsoft.playwright.Browser;
-import com.microsoft.playwright.BrowserType;
-import com.microsoft.playwright.Page;
-import com.microsoft.playwright.Playwright;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
+import com.microsoft.playwright.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
- * Scrapes player rankings from DraftSharks using a headless browser.
- *
- * Strategy:
- * 1. Launch a Playwright Chromium headless browser.
- * 2. Navigate to DraftSharks rankings URL.
- * 3. Wait for the data table to load (bypassing Cloudflare/bot protection).
- * 4. Extract the HTML and parse using Jsoup.
+ * Scraper for DraftSharks.com rankings.
+ * Uses Playwright to handle dynamic rendering (Alpine.js / HTMX).
  */
 @Component
 public class DraftSharksScraper implements RankingScraper {
 
     private static final Logger log = LoggerFactory.getLogger(DraftSharksScraper.class);
-
     private static final String SOURCE_ID = "draftsharks";
     private static final String SOURCE_NAME = "DraftSharks";
-    private static final String BASE_URL = "https://www.draftsharks.com/rankings";
 
     @Override
     public String getSourceId() {
@@ -44,142 +31,132 @@ public class DraftSharksScraper implements RankingScraper {
         return SOURCE_NAME;
     }
 
-    private String getEndpointForLeagueType(String leagueType) {
-        String slug = "";
-        if (leagueType != null) {
-            slug = switch (leagueType.toLowerCase()) {
-                case "ppr" -> "ppr";
-                case "half_ppr" -> "half-ppr";
-                case "superflex" -> "superflex";
-                default -> "";
-            };
-        }
-        return "https://www.draftsharks.com/rankings/load-table?pprSuperflexSlug=" + slug + "&researchDepth=rankings";
-    }
-
     @Override
     public List<PlayerRanking> scrapeRankings(int year, String leagueType) throws ScrapingException {
-        String url = getEndpointForLeagueType(leagueType);
-        log.info("Fetching rankings from DraftSharks using Playwright: {} (leagueType: {})", url, leagueType);
+        List<PlayerRanking> players = new ArrayList<>();
 
         try (Playwright playwright = Playwright.create()) {
-            Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
-            Page page = browser.newPage();
-            
-            try {
-                // Navigate with a timeout to avoid hanging indefinitely
-                page.navigate(url, new Page.NavigateOptions().setTimeout(30000));
-                
-                // Wait for the table rows with a specific timeout
-                page.waitForSelector("tr.player-row", new Page.WaitForSelectorOptions().setTimeout(15000));
-            } catch (com.microsoft.playwright.PlaywrightException e) {
-                log.error("Playwright failed to load or find elements at {}: {}", url, e.getMessage());
-                browser.close();
-                throw new ScrapingException(SOURCE_ID, "Timeout or navigation error: " + e.getMessage(), e);
-            }
+            // Launch browser with custom user agent to avoid bot detection
+            try (Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true))) {
+                BrowserContext context = browser.newContext(new Browser.NewContextOptions()
+                        .setUserAgent(
+                                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"));
+                Page page = context.newPage();
 
-            String html = page.content();
-            browser.close();
+                String url = getUrlForLeagueType(leagueType);
+                log.info("Navigating to DraftSharks: {}", url);
 
-            if (html == null || html.isBlank()) {
-                log.error("DraftSharks returned null or blank HTML content.");
-                throw new ScrapingException(SOURCE_ID, "Received empty HTML content from DraftSharks.");
-            }
+                try {
+                    // Navigate with a timeout
+                    page.navigate(url, new Page.NavigateOptions().setTimeout(30000));
 
-            log.info("DraftSharks HTML content received (length: {} characters). Starting parse...", html.length());
+                    // Wait for the data to load.
+                    page.waitForSelector("tbody[data-player-row], tr.player-row",
+                            new Page.WaitForSelectorOptions().setTimeout(15000));
 
-            Document doc = Jsoup.parse(html);
-            List<PlayerRanking> players = parseHtmlTable(doc);
+                    // Extra wait to allow dynamic content to fully render
+                    page.waitForTimeout(2000);
 
-            if (players.isEmpty()) {
-                // Log the first 1000 chars of HTML to help debug selector issues or blocks
-                String snippet = html.length() > 1000 ? html.substring(0, 1000) : html;
-                log.error("No players parsed from DraftSharks. HTML snippet: {}", snippet);
-                throw new ScrapingException(SOURCE_ID, "DraftSharks page loaded but no valid player rankings could be parsed. Check server logs for details.");
-            }
+                    // Extract data directly in the browser. This is much more robust than Jsoup
+                    // parsing.
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> extractedData = (List<Map<String, Object>>) page.evaluate("() => {" +
+                            "  const results = [];" +
+                            "  const containers = document.querySelectorAll('tbody[data-player-row]');" +
+                            "  " +
+                            "  containers.forEach((container, index) => {" +
+                            "    const name = container.getAttribute('data-player-name') || '';" +
+                            "    const pos = container.getAttribute('data-fantasy-position') || '';" +
+                            "    " +
+                            "    // Extract team - usually in a span inside .team-position-logo-container" +
+                            "    let team = 'FA';" +
+                            "    const teamSpan = container.querySelector('.team-position-logo-container span');" +
+                            "    if (teamSpan) team = teamSpan.textContent.trim();" +
+                            "    " +
+                            "    // Rank is often the 1-indexed count, but can be extracted from td.rank if present" +
+                            "    let rank = index + 1;" +
+                            "    const rankTd = container.querySelector('td.rank');" +
+                            "    if (rankTd) {" +
+                            "      const rankVal = parseInt(rankTd.textContent.replace(/[^0-9]/g, ''));" +
+                            "      if (!isNaN(rankVal)) rank = rankVal;" +
+                            "    }" +
+                            "    " +
+                            "    if (name) {" +
+                            "      results.push({ name, position: pos, team, rank });" +
+                            "    }" +
+                            "  });" +
+                            "  return results;" +
+                            "}");
 
-            return players;
+                    log.info("DraftSharks browser evaluation returned {} players", extractedData.size());
 
-        } catch (ScrapingException e) {
-            throw e; // Rethrow our own exception
-        } catch (Exception e) {
-            log.error("Unexpected error during DraftSharks scraping", e);
-            throw new ScrapingException(SOURCE_ID, "Unexpected error: " + e.getMessage(), e);
-        }
-    }
+                    for (Map<String, Object> p : extractedData) {
+                        String name = (String) p.get("name");
+                        String pos = (String) p.get("position");
+                        String team = (String) p.get("team");
+                        int rank = (int) p.get("rank");
 
-    private List<PlayerRanking> parseHtmlTable(Document doc) {
-        List<PlayerRanking> results = new ArrayList<>();
-        
-        if (doc == null) return results;
-
-        // Since we hit the HTMX endpoint directly, the response is just a list of <tr> elements
-        // without the parent tbody. We can just select all tr elements with the class 'player-row'.
-        Elements rows = doc.select("tr.player-row");
-        log.info("Jsoup found {} potential player rows with selector 'tr.player-row'", rows.size());
-        
-        if (rows.isEmpty()) {
-            log.warn("No player rows found in the fetched HTML for DraftSharks.");
-            return results;
-        }
-
-        int rank = 1;
-        for (Element row : rows) {
-            try {
-                String name = "";
-                String xData = row.attr("x-data");
-                if (xData != null && xData.contains("\"name\":\"")) {
-                    int start = xData.indexOf("\"name\":\"") + 8;
-                    int end = xData.indexOf("\"", start);
-                    if (start > 7 && end > start) {
-                        name = xData.substring(start, end);
+                        PlayerRanking player = new PlayerRanking(name, normalizePosition(pos), team);
+                        player.addSourceRanking(SOURCE_ID, rank);
+                        players.add(player);
                     }
-                }
-                
-                // Fallback to data attribute
-                if (name == null || name.isBlank()) {
-                    name = row.attr("data-player-name").trim();
-                }
-                
-                String position = row.attr("data-fantasy-position");
-                if (position != null) {
-                    position = position.trim();
-                }
-                
-                String team = "FA";
-                Element teamSpan = row.selectFirst(".team-position-logo-container span");
-                if (teamSpan != null && !teamSpan.text().isBlank()) {
-                    team = teamSpan.text().trim();
-                }
 
-                if (name == null || name.isBlank() || position == null || position.isBlank()) {
-                    log.debug("Skipping invalid player row: name='{}', position='{}'", name, position);
-                    continue;
-                }
+                    if (players.isEmpty()) {
+                        log.error("No players found on DraftSharks page. Check selectors.");
+                        throw new ScrapingException(SOURCE_ID, "No player rankings found on page.");
+                    }
 
-                PlayerRanking player = new PlayerRanking(name, normalizePosition(position), team.toUpperCase());
-                player.addSourceRanking(SOURCE_ID, rank);
-                results.add(player);
-                rank++;
+                } catch (Exception e) {
+                    log.error("Error during DraftSharks navigation or evaluation: {}", e.getMessage());
+                    throw new ScrapingException(SOURCE_ID, "Failed to extract data from DraftSharks: " + e.getMessage(),
+                            e);
+                }
             } catch (Exception e) {
-                log.warn("Failed to parse individual player row in DraftSharks: {}", e.getMessage());
-                // Continue to next row instead of failing whole scrape
+                log.error("DraftSharks browser session failed: {}", e.getMessage());
+                throw new ScrapingException(SOURCE_ID, "Browser session failed: " + e.getMessage(), e);
             }
+        } catch (Exception e) {
+            log.error("DraftSharks scraping failed: {}", e.getMessage());
+            throw new ScrapingException(SOURCE_ID, "Scraping failed: " + e.getMessage(), e);
         }
 
-        return results;
+        return players;
     }
 
-    private String normalizePosition(String position) {
-        if (position == null) return "";
-        return switch (position.toUpperCase()) {
-            case "QB", "QUARTERBACK" -> "QB";
-            case "RB", "RUNNING BACK", "HB" -> "RB";
-            case "WR", "WIDE RECEIVER" -> "WR";
-            case "TE", "TIGHT END" -> "TE";
-            case "K", "PK", "KICKER" -> "K";
-            case "DEF", "DST", "D/ST", "DEFENSE" -> "DEF";
-            default -> position.toUpperCase();
-        };
+    private String getUrlForLeagueType(String leagueType) {
+        if (leagueType == null)
+            return "https://www.draftsharks.com/rankings/ppr";
+        switch (leagueType.toLowerCase()) {
+            case "standard":
+                return "https://www.draftsharks.com/rankings/standard";
+            case "half_ppr":
+                return "https://www.draftsharks.com/rankings/half-ppr";
+            case "superflex":
+                return "https://www.draftsharks.com/rankings/ppr-superflex";
+            case "ppr":
+            default:
+                return "https://www.draftsharks.com/rankings/ppr";
+        }
+    }
+
+    private String normalizePosition(String pos) {
+        if (pos == null)
+            return "N/A";
+        pos = pos.toUpperCase().trim();
+        // Remove numbers (e.g. WR1 -> WR)
+        pos = pos.replaceAll("\\d+", "");
+        if (pos.startsWith("QB"))
+            return "QB";
+        if (pos.startsWith("RB"))
+            return "RB";
+        if (pos.startsWith("WR"))
+            return "WR";
+        if (pos.startsWith("TE"))
+            return "TE";
+        if (pos.startsWith("K"))
+            return "K";
+        if (pos.startsWith("DEF") || pos.startsWith("DST"))
+            return "DEF";
+        return pos;
     }
 }
