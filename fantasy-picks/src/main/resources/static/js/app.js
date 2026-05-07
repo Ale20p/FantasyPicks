@@ -11,17 +11,17 @@ const API_BASE = '';  // Same-origin — Spring Boot serves both the API and sta
 
 // Available data sources (mirrors what the backend will support)
 const DATA_SOURCES = [
-    { id: 'sleeper',    name: 'Sleeper',        desc: 'Sleeper app consensus rankings.' },
-    { id: 'fantasypros', name: 'FantasyPros',   desc: 'FantasyPros expert consensus rankings (ECR).' },
-    { id: 'draftsharks', name: 'DraftSharks',   desc: 'DraftSharks award-winning projections and rankings.' },
+    { id: 'sleeper', name: 'Sleeper', desc: 'Sleeper app consensus rankings.' },
+    { id: 'fantasypros', name: 'FantasyPros', desc: 'FantasyPros expert consensus rankings (ECR).' },
+    { id: 'draftsharks', name: 'DraftSharks', desc: 'DraftSharks award-winning projections and rankings.' },
 ];
 
 // NFL Teams for the team filter dropdown
 const NFL_TEAMS = [
-    'ARI','ATL','BAL','BUF','CAR','CHI','CIN','CLE',
-    'DAL','DEN','DET','GB','HOU','IND','JAX','KC',
-    'LAC','LAR','LV','MIA','MIN','NE','NO','NYG',
-    'NYJ','PHI','PIT','SEA','SF','TB','TEN','WAS'
+    'ARI', 'ATL', 'BAL', 'BUF', 'CAR', 'CHI', 'CIN', 'CLE',
+    'DAL', 'DEN', 'DET', 'GB', 'HOU', 'IND', 'JAX', 'KC',
+    'LAC', 'LAR', 'LV', 'MIA', 'MIN', 'NE', 'NO', 'NYG',
+    'NYJ', 'PHI', 'PIT', 'SEA', 'SF', 'TB', 'TEN', 'WAS'
 ];
 
 // ── STATE ─────────────────────────────────────────────────────
@@ -36,34 +36,34 @@ let state = {
     searchQuery: '',
     filterPosition: 'ALL',
     filterTeam: 'ALL',
-    filterLeagueType: 'standard',
+    filterLeagueType: 'ppr',
     isLoading: false,
 };
 
 // ── DOM REFERENCES ────────────────────────────────────────────
-const $  = (sel) => document.querySelector(sel);
+const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
 const dom = {
-    sourceCards:     $('#source-cards'),
-    searchInput:     $('#input-search'),
-    filterYear:      $('#filter-year'),
-    filterLeagueType:$('#filter-league-type'),
-    filterPosition:  $('#filter-position'),
-    filterTeam:      $('#filter-team'),
-    tableHeaderRow:  $('#table-header-row'),
-    tableBody:       $('#rankings-body'),
-    tableWrapper:    $('.table-wrapper'),
-    stateLoading:    $('#state-loading'),
-    stateEmpty:      $('#state-empty'),
-    stateError:      $('#state-error'),
-    errorMessage:    $('#error-message'),
-    btnRefresh:      $('#btn-refresh-data'),
+    sourceCards: $('#source-cards'),
+    searchInput: $('#input-search'),
+    filterYear: $('#filter-year'),
+    filterLeagueType: $('#filter-league-type'),
+    filterPosition: $('#filter-position'),
+    filterTeam: $('#filter-team'),
+    tableHeaderRow: $('#table-header-row'),
+    tableBody: $('#rankings-body'),
+    tableWrapper: $('.table-wrapper'),
+    stateLoading: $('#state-loading'),
+    stateEmpty: $('#state-empty'),
+    stateError: $('#state-error'),
+    errorMessage: $('#error-message'),
+    btnRefresh: $('#btn-refresh-data'),
     statPlayerCount: $('#stat-player-count'),
     statSourceCount: $('#stat-source-count'),
     statLastUpdated: $('#stat-last-updated'),
-    statSeason:      $('#stat-season'),
-    toastContainer:  $('#toast-container'),
+    statSeason: $('#stat-season'),
+    toastContainer: $('#toast-container'),
 };
 
 // ═══════════════════════════════════════════════════════════════

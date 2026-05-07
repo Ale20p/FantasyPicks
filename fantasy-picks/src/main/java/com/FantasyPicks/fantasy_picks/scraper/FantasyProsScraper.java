@@ -36,12 +36,12 @@ public class FantasyProsScraper implements RankingScraper {
     private static final String RANKINGS_BASE_URL = "https://www.fantasypros.com/nfl/rankings/";
 
     private String getEndpointForLeagueType(String leagueType) {
-        if (leagueType == null) return "consensus-cheatsheets.php";
+        if (leagueType == null) return "ppr-cheatsheets.php";
         return switch (leagueType.toLowerCase()) {
             case "ppr" -> "ppr-cheatsheets.php";
             case "half_ppr" -> "half-point-ppr-cheatsheets.php";
-            case "superflex" -> "superflex-cheatsheets.php";
-            default -> "consensus-cheatsheets.php";
+            case "standard" -> "consensus-cheatsheets.php";
+            default -> "ppr-cheatsheets.php";
         };
     }
 

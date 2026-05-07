@@ -40,7 +40,7 @@ public class PlayerController {
     public ResponseEntity<PlayerApiResponse> getPlayers(
             @RequestParam(name = "sources", defaultValue = "fantasypros") String sources,
             @RequestParam(name = "year", defaultValue = "0") int year,
-            @RequestParam(name = "leagueType", defaultValue = "standard") String leagueType) {
+            @RequestParam(name = "leagueType", defaultValue = "ppr") String leagueType) {
 
         // Default to current year if not specified (or invalid)
         if (year <= 0) {

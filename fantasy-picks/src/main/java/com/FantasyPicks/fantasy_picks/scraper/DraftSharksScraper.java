@@ -131,8 +131,6 @@ public class DraftSharksScraper implements RankingScraper {
                 return "https://www.draftsharks.com/rankings/standard";
             case "half_ppr":
                 return "https://www.draftsharks.com/rankings/half-ppr";
-            case "superflex":
-                return "https://www.draftsharks.com/rankings/ppr-superflex";
             case "ppr":
             default:
                 return "https://www.draftsharks.com/rankings/ppr";

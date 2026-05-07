@@ -25,7 +25,7 @@ public interface RankingScraper {
      * Scrape player rankings from this source for a specific season year.
      *
      * @param year The season year to fetch rankings for (e.g. 2025, 2026)
-     * @param leagueType The type of league (standard, ppr, half_ppr, superflex)
+     * @param leagueType The type of league (ppr, half_ppr, standard) — all non-superflex
      * @return A list of PlayerRanking objects. Each object should have:
      *         - name, position, team populated
      *         - a single entry in the rankings map for this source
