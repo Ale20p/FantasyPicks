@@ -1,14 +1,19 @@
 package com.FantasyPicks.fantasy_picks.scraper;
 
-import com.FantasyPicks.fantasy_picks.model.PlayerRanking;
-import com.microsoft.playwright.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import com.FantasyPicks.fantasy_picks.model.PlayerRanking;
+import com.microsoft.playwright.Browser;
+import com.microsoft.playwright.BrowserContext;
+import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Page;
+import com.microsoft.playwright.Playwright;
 
 /**
  * Scraper for DraftSharks.com rankings.
@@ -40,7 +45,11 @@ public class DraftSharksScraper implements RankingScraper {
             try (Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true))) {
                 BrowserContext context = browser.newContext(new Browser.NewContextOptions()
                         .setUserAgent(
-                                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"));
+                                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                                .setViewportSize(1280, 800)); // Set to pretend to be a desktop monitor
+
+                context.addInitScript("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})");
+                
                 Page page = context.newPage();
 
                 String url = getUrlForLeagueType(leagueType);
@@ -50,42 +59,48 @@ public class DraftSharksScraper implements RankingScraper {
                     // Navigate with a timeout
                     page.navigate(url, new Page.NavigateOptions().setTimeout(30000));
 
-                    // Wait for the data to load.
+                    // Scroll down the page to trigger lazy-loaded dynamic content
+                    log.info("Scrolling down to trigger DraftSharks lazy loading...");
+                    for (int i = 0; i < 4; i++) {
+                        page.mouse().wheel(0, 800);
+                        page.waitForTimeout(500);
+                    }
+
+                    // Wait for the data to load
                     page.waitForSelector("tbody[data-player-row], tr.player-row",
                             new Page.WaitForSelectorOptions().setTimeout(15000));
 
                     // Extra wait to allow dynamic content to fully render
                     page.waitForTimeout(2000);
 
-                    // Extract data directly in the browser. This is much more robust than Jsoup
-                    // parsing.
+                    // Take a screenshot for debugging
+                    // page.screenshot(new Page.ScreenshotOptions().setPath(java.nio.file.Paths.get("headless-debug.png")));
+
+                    // Extract data directly in the browser via JavaScript evaluation.
+                    // IMPORTANT: No single-line comments (//) in this JS string — the Java
+                    // concatenation produces one long line, so // would swallow all subsequent code.
                     @SuppressWarnings("unchecked")
-                    List<Map<String, Object>> extractedData = (List<Map<String, Object>>) page.evaluate("() => {" +
-                            "  const results = [];" +
-                            "  const containers = document.querySelectorAll('tbody[data-player-row]');" +
-                            "  " +
-                            "  containers.forEach((container, index) => {" +
-                            "    const name = container.getAttribute('data-player-name') || '';" +
-                            "    const pos = container.getAttribute('data-fantasy-position') || '';" +
-                            "    " +
-                            "    // Extract team - usually in a span inside .team-position-logo-container" +
-                            "    let team = 'FA';" +
-                            "    const teamSpan = container.querySelector('.team-position-logo-container span');" +
-                            "    if (teamSpan) team = teamSpan.textContent.trim();" +
-                            "    " +
-                            "    // Rank is often the 1-indexed count, but can be extracted from td.rank if present" +
-                            "    let rank = index + 1;" +
-                            "    const rankTd = container.querySelector('td.rank');" +
-                            "    if (rankTd) {" +
-                            "      const rankVal = parseInt(rankTd.textContent.replace(/[^0-9]/g, ''));" +
-                            "      if (!isNaN(rankVal)) rank = rankVal;" +
-                            "    }" +
-                            "    " +
-                            "    if (name) {" +
-                            "      results.push({ name, position: pos, team, rank });" +
-                            "    }" +
-                            "  });" +
-                            "  return results;" +
+                    List<Map<String, Object>> extractedData = (List<Map<String, Object>>) page.evaluate(
+                            "() => {\n" +
+                            "  const results = [];\n" +
+                            "  const containers = document.querySelectorAll('tbody[data-player-row]');\n" +
+                            "  containers.forEach((container, index) => {\n" +
+                            "    const name = container.getAttribute('data-player-name') || '';\n" +
+                            "    const pos = container.getAttribute('data-fantasy-position') || '';\n" +
+                            "    let team = 'FA';\n" +
+                            "    const teamSpan = container.querySelector('.team-position-logo-container span');\n" +
+                            "    if (teamSpan) team = teamSpan.textContent.trim();\n" +
+                            "    let rank = index + 1;\n" +
+                            "    const rankTd = container.querySelector('td.rank');\n" +
+                            "    if (rankTd) {\n" +
+                            "      const rankVal = parseInt(rankTd.textContent.replace(/[^0-9]/g, ''));\n" +
+                            "      if (!isNaN(rankVal)) rank = rankVal;\n" +
+                            "    }\n" +
+                            "    if (name) {\n" +
+                            "      results.push({ name: name, position: pos, team: team, rank: rank });\n" +
+                            "    }\n" +
+                            "  });\n" +
+                            "  return results;\n" +
                             "}");
 
                     log.info("DraftSharks browser evaluation returned {} players", extractedData.size());
