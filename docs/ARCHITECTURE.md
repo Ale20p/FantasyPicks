@@ -15,6 +15,7 @@ Data Sources:
 - NFL.com
 - FantasyPros
 - CBS Sports
+- DraftSharks
 
 Normalization Layer:
 - will be used to normalize the data from the different sources
