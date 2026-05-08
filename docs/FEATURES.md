@@ -25,6 +25,7 @@ Pick players based on overall consensus of the ranking for each player.
 	- Each time user clicks on `Get Data` it does 1 of 2 things, by checking if the user has updated data within the last 24 hours of data update with a `last_updated` parameter
 		- If not, then automatically grabs most recent data available, so it tries to grab most recent available data and if it's successful then it replaces the data in the database, if not then user is notified that data retrival has failed and old data will continue to be used. 
 		- If data has been updated within the last 24 hours, then data is not to be updated automatically, unless user species/manually clicks on `Refresh Data` to retrive new data and try to put it in database.
+		- The `Refresh Data` button can only be clicked and activated every 10 minutes.
 
 	- Data in databse will only consist of normalized data.
 	
