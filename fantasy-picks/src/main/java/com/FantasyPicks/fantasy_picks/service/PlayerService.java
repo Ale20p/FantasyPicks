@@ -86,13 +86,7 @@ public class PlayerService {
                 shouldScrape = false;
             } else {
                 if (refresh) {
-                    if (minutesSinceUpdate < 10) {
-                        log.warn("Refresh requested but last update was {} minutes ago. Using DB data.", minutesSinceUpdate);
-                        shouldScrape = false;
-                        // You could throw an exception here, but returning DB data is safer.
-                    } else {
-                        shouldScrape = true;
-                    }
+                    shouldScrape = true;
                 } else {
                     if (hoursSinceUpdate >= 24) {
                         shouldScrape = true;
