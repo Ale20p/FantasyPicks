@@ -58,6 +58,7 @@ const dom = {
     stateEmpty: $('#state-empty'),
     stateError: $('#state-error'),
     errorMessage: $('#error-message'),
+    btnGetData: $('#btn-get-data'),
     btnRefresh: $('#btn-refresh-data'),
     statPlayerCount: $('#stat-player-count'),
     statSourceCount: $('#stat-source-count'),
@@ -156,8 +157,9 @@ function bindEvents() {
         if (card) toggleSource(card.dataset.sourceId);
     });
 
-    // Refresh button
-    dom.btnRefresh.addEventListener('click', fetchPlayerData);
+    // Refresh / Get Data buttons
+    dom.btnGetData.addEventListener('click', () => fetchPlayerData(false));
+    dom.btnRefresh.addEventListener('click', () => fetchPlayerData(true));
 
     // Search input (debounced)
     let searchTimer;
@@ -187,9 +189,9 @@ function bindEvents() {
     // Year filter — changing the year triggers a new data fetch
     dom.filterYear.addEventListener('change', () => {
         state.selectedYear = parseInt(dom.filterYear.value, 10);
-        // If we already have data loaded, auto-refresh with the new year
+        // If we already have data loaded, auto-fetch with the new year
         if (state.selectedSources.size > 0 && state.players.length > 0) {
-            fetchPlayerData();
+            fetchPlayerData(false);
         }
     });
 
@@ -197,7 +199,7 @@ function bindEvents() {
     dom.filterLeagueType.addEventListener('change', () => {
         state.filterLeagueType = dom.filterLeagueType.value;
         if (state.selectedSources.size > 0 && state.players.length > 0) {
-            fetchPlayerData();
+            fetchPlayerData(false);
         }
     });
 
@@ -247,7 +249,7 @@ function bindEvents() {
 // ═══════════════════════════════════════════════════════════════
 // DATA FETCHING
 // ═══════════════════════════════════════════════════════════════
-async function fetchPlayerData() {
+async function fetchPlayerData(forceRefresh = false) {
     if (state.selectedSources.size === 0) {
         showToast('Please select at least one data source.', 'info');
         return;
@@ -259,7 +261,8 @@ async function fetchPlayerData() {
         const sourcesParam = [...state.selectedSources].join(',');
         const yearParam = state.selectedYear || new Date().getFullYear();
         const leagueTypeParam = state.filterLeagueType || 'standard';
-        const response = await fetch(`${API_BASE}/api/players?sources=${encodeURIComponent(sourcesParam)}&year=${yearParam}&leagueType=${encodeURIComponent(leagueTypeParam)}`);
+        const refreshParam = forceRefresh ? 'true' : 'false';
+        const response = await fetch(`${API_BASE}/api/players?sources=${encodeURIComponent(sourcesParam)}&year=${yearParam}&leagueType=${encodeURIComponent(leagueTypeParam)}&refresh=${refreshParam}`);
 
         if (!response.ok) {
             throw new Error(`Server responded with ${response.status}`);
@@ -445,7 +448,9 @@ function updateUIState() {
 
 function setLoading(isLoading) {
     state.isLoading = isLoading;
+    dom.btnGetData.disabled = isLoading;
     dom.btnRefresh.disabled = isLoading;
+    dom.btnGetData.classList.toggle('loading', isLoading);
     dom.btnRefresh.classList.toggle('loading', isLoading);
 
     if (isLoading) {

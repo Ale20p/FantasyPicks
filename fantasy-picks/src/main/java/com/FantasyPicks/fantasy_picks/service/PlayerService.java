@@ -1,41 +1,54 @@
 package com.FantasyPicks.fantasy_picks.service;
 
+import com.FantasyPicks.fantasy_picks.entity.BasePlayerRankingEntity;
+import com.FantasyPicks.fantasy_picks.entity.HalfPprPlayerRankingEntity;
+import com.FantasyPicks.fantasy_picks.entity.PprPlayerRankingEntity;
+import com.FantasyPicks.fantasy_picks.entity.ScrapeMetadataEntity;
+import com.FantasyPicks.fantasy_picks.entity.StandardPlayerRankingEntity;
 import com.FantasyPicks.fantasy_picks.model.PlayerApiResponse;
 import com.FantasyPicks.fantasy_picks.model.PlayerRanking;
 import com.FantasyPicks.fantasy_picks.normalization.PlayerNormalizer;
+import com.FantasyPicks.fantasy_picks.repository.HalfPprPlayerRankingRepository;
+import com.FantasyPicks.fantasy_picks.repository.PprPlayerRankingRepository;
+import com.FantasyPicks.fantasy_picks.repository.ScrapeMetadataRepository;
+import com.FantasyPicks.fantasy_picks.repository.StandardPlayerRankingRepository;
 import com.FantasyPicks.fantasy_picks.scraper.RankingScraper;
 import com.FantasyPicks.fantasy_picks.scraper.ScrapingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Orchestrates scraping from multiple sources, merges player data,
- * and computes the overall consensus ranking.
- *
- * Uses {@link PlayerNormalizer} to ensure that the same real-world player
- * is always merged into a single entry regardless of how each source
- * formats their name or team abbreviation.
- */
 @Service
 public class PlayerService {
 
     private static final Logger log = LoggerFactory.getLogger(PlayerService.class);
 
-    /**
-     * All available scrapers, injected by Spring.
-     * Spring auto-discovers every @Component that implements RankingScraper.
-     */
     private final Map<String, RankingScraper> scraperMap;
-
-    /** Normalizes player names and team abbreviations for cross-source deduplication. */
     private final PlayerNormalizer normalizer;
+    
+    private final PprPlayerRankingRepository pprRepo;
+    private final HalfPprPlayerRankingRepository halfPprRepo;
+    private final StandardPlayerRankingRepository standardRepo;
+    private final ScrapeMetadataRepository metadataRepo;
 
-    public PlayerService(List<RankingScraper> scrapers, PlayerNormalizer normalizer) {
+    public PlayerService(List<RankingScraper> scrapers, PlayerNormalizer normalizer,
+                         PprPlayerRankingRepository pprRepo,
+                         HalfPprPlayerRankingRepository halfPprRepo,
+                         StandardPlayerRankingRepository standardRepo,
+                         ScrapeMetadataRepository metadataRepo) {
         this.normalizer = normalizer;
+        this.pprRepo = pprRepo;
+        this.halfPprRepo = halfPprRepo;
+        this.standardRepo = standardRepo;
+        this.metadataRepo = metadataRepo;
+        
         this.scraperMap = new LinkedHashMap<>();
         for (RankingScraper scraper : scrapers) {
             scraperMap.put(scraper.getSourceId(), scraper);
@@ -43,32 +56,93 @@ public class PlayerService {
         }
     }
 
-    /**
-     * @return Set of all registered source IDs.
-     */
     public Set<String> getAvailableSourceIds() {
         return scraperMap.keySet();
     }
 
-    /**
-     * Fetch player rankings from the requested sources for a specific season year,
-     * merge them, compute overall rank, and return the API response.
-     *
-     * @param requestedSources Comma-separated source IDs (e.g. "fantasypros,espn")
-     * @param year The season year to fetch rankings for (e.g. 2025, 2026)
-     * @return PlayerApiResponse ready to be serialized to JSON
-     */
-    public PlayerApiResponse getPlayerRankings(String requestedSources, int year, String leagueType) {
-        // Parse the requested source IDs
+    @Transactional
+    public PlayerApiResponse getPlayerRankings(String requestedSources, int year, String leagueType, boolean refresh) {
         Set<String> sourceIds = Arrays.stream(requestedSources.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        log.info("Fetching rankings from sources: {} for year: {}, leagueType: {}", sourceIds, year, leagueType);
+        log.info("Fetching rankings: sources={}, year={}, leagueType={}, refresh={}", sourceIds, year, leagueType, refresh);
 
-        // Scrape each requested source
-        // Key = normalized "playerName|team" for deduplication, Value = merged PlayerRanking
+        Optional<ScrapeMetadataEntity> metadataOpt = metadataRepo.findByYearAndLeagueType(year, leagueType);
+        boolean shouldScrape = false;
+        int currentYear = java.time.Year.now().getValue();
+        
+        if (metadataOpt.isEmpty()) {
+            shouldScrape = true;
+        } else {
+            ScrapeMetadataEntity metadata = metadataOpt.get();
+            LocalDateTime lastUpdated = metadata.getLastUpdated();
+            long minutesSinceUpdate = ChronoUnit.MINUTES.between(lastUpdated, LocalDateTime.now());
+            long hoursSinceUpdate = ChronoUnit.HOURS.between(lastUpdated, LocalDateTime.now());
+
+            if (year < currentYear) {
+                log.info("Requested year is in the past. Always returning DB data.");
+                shouldScrape = false;
+            } else {
+                if (refresh) {
+                    if (minutesSinceUpdate < 10) {
+                        log.warn("Refresh requested but last update was {} minutes ago. Using DB data.", minutesSinceUpdate);
+                        shouldScrape = false;
+                        // You could throw an exception here, but returning DB data is safer.
+                    } else {
+                        shouldScrape = true;
+                    }
+                } else {
+                    if (hoursSinceUpdate >= 24) {
+                        shouldScrape = true;
+                    }
+                }
+            }
+        }
+
+        List<PlayerRanking> players;
+        boolean updateSuccess = false;
+        
+        if (shouldScrape) {
+            log.info("Scraping fresh data...");
+            players = scrapeAndMerge(sourceIds, year, leagueType);
+            if (!players.isEmpty()) {
+                saveToDatabase(players, year, leagueType);
+                updateMetadata(year, leagueType);
+                updateSuccess = true;
+            } else {
+                log.error("Scraping returned no data! Using old data from DB.");
+                players = loadFromDatabase(year, leagueType, sourceIds);
+            }
+        } else {
+            log.info("Loading data from database...");
+            players = loadFromDatabase(year, leagueType, sourceIds);
+            if (players.isEmpty()) {
+                log.info("DB is empty, fallback to scraping...");
+                players = scrapeAndMerge(sourceIds, year, leagueType);
+                if (!players.isEmpty()) {
+                    saveToDatabase(players, year, leagueType);
+                    updateMetadata(year, leagueType);
+                    updateSuccess = true;
+                }
+            }
+        }
+        
+        computeOverallRanks(players, sourceIds);
+        players.sort(Comparator.comparingInt(PlayerRanking::getOverallRank));
+        
+        PlayerApiResponse response = new PlayerApiResponse(players);
+        metadataOpt = metadataRepo.findByYearAndLeagueType(year, leagueType);
+        if (metadataOpt.isPresent()) {
+            // Send ISO string for JS
+            response.setLastUpdated(metadataOpt.get().getLastUpdated().toInstant(ZoneOffset.UTC).toString());
+        }
+        
+        return response;
+    }
+
+    private List<PlayerRanking> scrapeAndMerge(Set<String> sourceIds, int year, String leagueType) {
         Map<String, PlayerRanking> mergedPlayers = new LinkedHashMap<>();
 
         for (String sourceId : sourceIds) {
@@ -83,44 +157,102 @@ public class PlayerService {
                 log.info("Source '{}' returned {} players", sourceId, scraped.size());
 
                 for (PlayerRanking player : scraped) {
-                    // Normalize team abbreviation on the display model too
                     player.setTeam(normalizer.normalizeTeam(player.getTeam()));
-
-                    // Build normalized key for deduplication
                     String key = normalizer.buildNormalizedKey(player.getName(), player.getTeam());
                     PlayerRanking existing = mergedPlayers.get(key);
 
                     if (existing == null) {
-                        // First time seeing this player — add to map
                         mergedPlayers.put(key, player);
                     } else {
-                        // Merge: copy this source's ranking into the existing player
                         existing.getRankings().putAll(player.getRankings());
                     }
                 }
             } catch (ScrapingException e) {
                 log.error("Failed to scrape from '{}': {}", sourceId, e.getMessage());
-                // Continue with other sources — partial data is better than none
             }
         }
-
-        // Compute overall rank (average of all source rankings)
-        List<PlayerRanking> playerList = new ArrayList<>(mergedPlayers.values());
-        computeOverallRanks(playerList, sourceIds);
-
-        // Sort by overall rank
-        playerList.sort(Comparator.comparingInt(PlayerRanking::getOverallRank));
-
-        log.info("Returning {} merged players from {} source(s)", playerList.size(), sourceIds.size());
-        return new PlayerApiResponse(playerList);
+        return new ArrayList<>(mergedPlayers.values());
     }
 
-    /**
-     * Compute the overall rank for each player based on the average of their
-     * rankings across the selected sources.
-     */
+    private List<PlayerRanking> loadFromDatabase(int year, String leagueType, Set<String> sourceIds) {
+        List<? extends BasePlayerRankingEntity> entities;
+        if ("ppr".equalsIgnoreCase(leagueType)) {
+            entities = pprRepo.findByYearOrderByOverallRankAsc(year);
+        } else if ("half_ppr".equalsIgnoreCase(leagueType)) {
+            entities = halfPprRepo.findByYearOrderByOverallRankAsc(year);
+        } else {
+            entities = standardRepo.findByYearOrderByOverallRankAsc(year);
+        }
+
+        return entities.stream().map(e -> {
+            PlayerRanking p = new PlayerRanking();
+            p.setName(e.getName());
+            p.setTeam(e.getTeam());
+            p.setPosition(e.getPosition());
+            p.setOverallRank(e.getOverallRank());
+
+            Map<String, Integer> rankings = new HashMap<>();
+            for (String sourceId : sourceIds) {
+                Integer rank = e.getRankings().get(sourceId);
+                if (rank != null) {
+                    rankings.put(sourceId, rank);
+                }
+            }
+            p.setRankings(rankings);
+            return p;
+        }).collect(Collectors.toList());
+    }
+
+    private void saveToDatabase(List<PlayerRanking> players, int year, String leagueType) {
+        if ("ppr".equalsIgnoreCase(leagueType)) {
+            pprRepo.deleteByYear(year);
+            List<PprPlayerRankingEntity> entities = players.stream().map(p -> {
+                PprPlayerRankingEntity e = new PprPlayerRankingEntity();
+                mapToEntity(p, e, year);
+                return e;
+            }).collect(Collectors.toList());
+            pprRepo.saveAll(entities);
+        } else if ("half_ppr".equalsIgnoreCase(leagueType)) {
+            halfPprRepo.deleteByYear(year);
+            List<HalfPprPlayerRankingEntity> entities = players.stream().map(p -> {
+                HalfPprPlayerRankingEntity e = new HalfPprPlayerRankingEntity();
+                mapToEntity(p, e, year);
+                return e;
+            }).collect(Collectors.toList());
+            halfPprRepo.saveAll(entities);
+        } else {
+            standardRepo.deleteByYear(year);
+            List<StandardPlayerRankingEntity> entities = players.stream().map(p -> {
+                StandardPlayerRankingEntity e = new StandardPlayerRankingEntity();
+                mapToEntity(p, e, year);
+                return e;
+            }).collect(Collectors.toList());
+            standardRepo.saveAll(entities);
+        }
+    }
+
+    private void mapToEntity(PlayerRanking dto, BasePlayerRankingEntity entity, int year) {
+        entity.setName(dto.getName());
+        entity.setPosition(dto.getPosition());
+        entity.setTeam(dto.getTeam());
+        entity.setYear(year);
+        entity.setOverallRank(dto.getOverallRank());
+        entity.setRankings(new HashMap<>(dto.getRankings()));
+    }
+
+    private void updateMetadata(int year, String leagueType) {
+        ScrapeMetadataEntity metadata = metadataRepo.findByYearAndLeagueType(year, leagueType)
+                .orElseGet(() -> {
+                    ScrapeMetadataEntity m = new ScrapeMetadataEntity();
+                    m.setYear(year);
+                    m.setLeagueType(leagueType);
+                    return m;
+                });
+        metadata.setLastUpdated(LocalDateTime.now());
+        metadataRepo.save(metadata);
+    }
+
     private void computeOverallRanks(List<PlayerRanking> players, Set<String> sourceIds) {
-        // First: compute average rank score for each player
         List<PlayerWithScore> scored = new ArrayList<>();
         for (PlayerRanking player : players) {
             double totalRank = 0;
@@ -134,21 +266,16 @@ public class PlayerService {
                 }
             }
 
-            // Players not ranked by any selected source get a high penalty score
             double avgRank = sourceCount > 0 ? totalRank / sourceCount : 9999.0;
             scored.add(new PlayerWithScore(player, avgRank));
         }
 
-        // Sort by average rank, then assign sequential overall ranks
         scored.sort(Comparator.comparingDouble(s -> s.avgRank));
         for (int i = 0; i < scored.size(); i++) {
             scored.get(i).player.setOverallRank(i + 1);
         }
     }
 
-    /**
-     * Helper record for sorting players by average rank score.
-     */
     private static class PlayerWithScore {
         final PlayerRanking player;
         final double avgRank;

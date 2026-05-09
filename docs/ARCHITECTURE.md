@@ -28,7 +28,7 @@ Normalization Layer:
     - Standardizes common nicknames (e.g., "Mitch Trubisky" vs "Mitchell Trubisky").
 
 ## Database
-Tech: PostgreSQL
+Tech: PostgreSQL with Docker
 - will be used to store players' data
 
 # Frontend

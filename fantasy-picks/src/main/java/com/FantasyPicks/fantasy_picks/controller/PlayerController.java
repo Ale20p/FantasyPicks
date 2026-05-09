@@ -40,17 +40,18 @@ public class PlayerController {
     public ResponseEntity<PlayerApiResponse> getPlayers(
             @RequestParam(name = "sources", defaultValue = "fantasypros") String sources,
             @RequestParam(name = "year", defaultValue = "0") int year,
-            @RequestParam(name = "leagueType", defaultValue = "ppr") String leagueType) {
+            @RequestParam(name = "leagueType", defaultValue = "ppr") String leagueType,
+            @RequestParam(name = "refresh", defaultValue = "false") boolean refresh) {
 
         // Default to current year if not specified (or invalid)
         if (year <= 0) {
             year = java.time.Year.now().getValue();
         }
 
-        log.info("GET /api/players — sources={}, year={}, leagueType={}", sources, year, leagueType);
+        log.info("GET /api/players — sources={}, year={}, leagueType={}, refresh={}", sources, year, leagueType, refresh);
 
         try {
-            PlayerApiResponse response = playerService.getPlayerRankings(sources, year, leagueType);
+            PlayerApiResponse response = playerService.getPlayerRankings(sources, year, leagueType, refresh);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
