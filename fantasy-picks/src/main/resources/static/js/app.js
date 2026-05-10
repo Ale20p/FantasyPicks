@@ -14,6 +14,7 @@ const DATA_SOURCES = [
     { id: 'sleeper', name: 'Sleeper', desc: 'Sleeper app consensus rankings.' },
     { id: 'fantasypros', name: 'FantasyPros', desc: 'FantasyPros expert consensus rankings (ECR).' },
     { id: 'draftsharks', name: 'DraftSharks', desc: 'DraftSharks award-winning projections and rankings.' },
+    { id: 'espn', name: 'ESPN', desc: 'ESPN fantasy football rankings and projections.' }
 ];
 
 // NFL Teams for the team filter dropdown
