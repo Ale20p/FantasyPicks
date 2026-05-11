@@ -18,14 +18,10 @@ import java.util.*;
  * Scrapes player rankings from the Sleeper public API.
  *
  * Strategy:
- * 1. Hit the public /v1/players/nfl endpoint (returns all NFL players as a JSON
- * object)
- * 2. Filter for fantasy-relevant, active, rostered players
- * 3. Sort by Sleeper's built-in "search_rank" field (lower = better)
- * 4. Re-number sequentially to produce a clean 1..N ranking
- *
- * Note: The response is large (~14 MB) containing ~10,000+ player entries.
- * Only fantasy-relevant positions on active rosters are kept.
+ * 1. Hit the specific /projections/nfl/{year} endpoint based on the league type (PPR, Half-PPR, Standard)
+ * 2. Filter for fantasy-relevant, active, rostered players with a valid ADP.
+ * 3. Use the returned sorted order (which is ordered by the requested adp format)
+ * 4. Assign sequential 1..N ranking
  */
 @Component
 public class SleeperScraper implements RankingScraper {
@@ -34,13 +30,12 @@ public class SleeperScraper implements RankingScraper {
 
     private static final String SOURCE_ID = "sleeper";
     private static final String SOURCE_NAME = "Sleeper";
-    private static final String API_URL = "https://api.sleeper.app/v1/players/nfl";
 
     /** Fantasy-relevant positions to keep */
     private static final Set<String> FANTASY_POSITIONS = Set.of("QB", "RB", "WR", "TE", "K", "PK", "DEF");
 
-    /** Ignore players with search_rank at or above this threshold */
-    private static final int MAX_SEARCH_RANK = 500;
+    /** Ignore players with ADP at or above this threshold */
+    private static final double MAX_ADP = 500.0;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final HttpClient httpClient = HttpClient.newBuilder()
@@ -58,21 +53,30 @@ public class SleeperScraper implements RankingScraper {
         return SOURCE_NAME;
     }
 
+    private String getAdpKeyForLeagueType(String leagueType) {
+        if (leagueType == null) return "adp_ppr";
+        return switch (leagueType.toLowerCase()) {
+            case "half_ppr" -> "adp_half_ppr";
+            case "standard" -> "adp_std";
+            default -> "adp_ppr";
+        };
+    }
+
+    private String getUrlForLeagueType(int year, String leagueType) {
+        String base = "https://api.sleeper.com/projections/nfl/" + year + 
+                      "?season_type=regular&position[]=DEF&position[]=K&position[]=QB&position[]=RB&position[]=TE&position[]=WR&order_by=";
+        return base + getAdpKeyForLeagueType(leagueType);
+    }
+
     @Override
     public List<PlayerRanking> scrapeRankings(int year, String leagueType) throws ScrapingException {
-        // Note: Sleeper's /v1/players/nfl endpoint does not support year-based
-        // or league-type based filtering.
-        // filtering.
-        // It always returns the current active player roster with search_rank.
-        // The year parameter is accepted for interface compliance but not used in the
-        // URL.
         try {
-            log.info("Fetching player data from Sleeper API: {} (year param {} ignored — Sleeper returns current data)",
-                    API_URL, year);
+            String apiUrl = getUrlForLeagueType(year, leagueType);
+            log.info("Fetching player data from Sleeper API: {}", apiUrl);
 
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(API_URL))
-                    .timeout(Duration.ofSeconds(45)) // Large response needs time
+                    .uri(URI.create(apiUrl))
+                    .timeout(Duration.ofSeconds(45)) 
                     .header("Accept", "application/json")
                     .header("User-Agent", "FantasyPicks/1.0")
                     .GET()
@@ -91,24 +95,23 @@ public class SleeperScraper implements RankingScraper {
 
             JsonNode root = objectMapper.readTree(response.body());
 
-            // The root is a JSON object: { "playerId": { ... }, "playerId2": { ... }, ... }
+            // The root is a JSON array
             List<PlayerRanking> players = new ArrayList<>();
-            Iterator<Map.Entry<String, JsonNode>> fields = root.fields();
+            
+            if (root.isArray()) {
+                String adpKey = getAdpKeyForLeagueType(leagueType);
+                int rank = 1;
+                for (JsonNode node : root) {
+                    JsonNode statsNode = node.path("stats");
+                    double adp = statsNode.path(adpKey).asDouble(999.0);
+                    if (adp >= MAX_ADP) continue;
 
-            while (fields.hasNext()) {
-                Map.Entry<String, JsonNode> entry = fields.next();
-                JsonNode playerNode = entry.getValue();
-
-                PlayerRanking ranking = parsePlayer(playerNode);
-                if (ranking != null) {
-                    players.add(ranking);
+                    PlayerRanking ranking = parsePlayer(node);
+                    if (ranking != null) {
+                        ranking.addSourceRanking(SOURCE_ID, rank++);
+                        players.add(ranking);
+                    }
                 }
-            }
-
-            // Sort by the raw search_rank, then re-number 1..N
-            players.sort(Comparator.comparingInt(p -> p.getRankings().get(SOURCE_ID)));
-            for (int i = 0; i < players.size(); i++) {
-                players.get(i).addSourceRanking(SOURCE_ID, i + 1);
             }
 
             log.info("Sleeper: parsed {} fantasy-relevant players", players.size());
@@ -127,42 +130,44 @@ public class SleeperScraper implements RankingScraper {
     // ═══════════════════════════════════════════════════════════════
 
     private PlayerRanking parsePlayer(JsonNode node) {
-        // Must be active
-        if (!node.path("active").asBoolean(false))
+        JsonNode playerNode = node.path("player");
+        if (playerNode.isMissingNode() || playerNode.isNull()) {
             return null;
+        }
 
         // Determine position
-        String position = resolvePosition(node);
+        String position = resolvePosition(playerNode);
         if (position == null || !FANTASY_POSITIONS.contains(position))
             return null;
 
-        // Must be on a team
-        String team = node.path("team").asText("");
+        // Must be on a team (check player node first, fallback to root node)
+        String team = playerNode.path("team").asText("");
+        if (team.isEmpty() || "null".equals(team)) {
+            team = node.path("team").asText("");
+        }
         if (team.isEmpty() || "null".equals(team))
             return null;
 
-        // Must have a reasonable search_rank
-        int searchRank = node.path("search_rank").asInt(Integer.MAX_VALUE);
-        if (searchRank >= MAX_SEARCH_RANK)
-            return null;
-
         // Must have a name
-        String fullName = node.path("full_name").asText("");
+        String fullName = playerNode.path("full_name").asText("");
         if (fullName.isBlank()) {
-            // Fallback for DEF entries which may use last_name as the team name
-            String firstName = node.path("first_name").asText("");
-            String lastName = node.path("last_name").asText("");
+            String firstName = playerNode.path("first_name").asText("");
+            String lastName = playerNode.path("last_name").asText("");
             fullName = (firstName + " " + lastName).trim();
-            if (fullName.isBlank())
-                return null;
+            if (fullName.isBlank()) {
+                // If it's a DEF and we have no name, use team abbreviation + " DEF"
+                if ("DEF".equals(normalizePosition(position))) {
+                    fullName = team + " DEF";
+                } else {
+                    return null;
+                }
+            }
         }
 
         PlayerRanking ranking = new PlayerRanking(
                 fullName,
                 normalizePosition(position),
                 team.toUpperCase());
-        // Store raw search_rank initially; will be re-numbered after sorting
-        ranking.addSourceRanking(SOURCE_ID, searchRank);
         return ranking;
     }
 
@@ -170,14 +175,14 @@ public class SleeperScraper implements RankingScraper {
      * Resolve the player's primary fantasy position.
      * Prefers fantasy_positions array over the general position field.
      */
-    private String resolvePosition(JsonNode node) {
-        JsonNode fantasyPos = node.path("fantasy_positions");
+    private String resolvePosition(JsonNode playerNode) {
+        JsonNode fantasyPos = playerNode.path("fantasy_positions");
         if (fantasyPos.isArray() && !fantasyPos.isEmpty()) {
             String pos = fantasyPos.get(0).asText("").toUpperCase();
             if (!pos.isEmpty())
                 return pos;
         }
-        String pos = node.path("position").asText("");
+        String pos = playerNode.path("position").asText("");
         return pos.isEmpty() ? null : pos.toUpperCase();
     }
 

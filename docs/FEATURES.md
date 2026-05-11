@@ -17,6 +17,8 @@ Pick players based on overall consensus of the ranking for each player.
 		- 0.5 PPR
 		- Non-PPR/Standard
 
+	5) Loading bars for data retrival 
+
 2) Database: (There will be a `Get Data` button and a `Refresh Data` button)
 	- When it's the first time running the application and there's no data, user can either click on `Get Data` or `Refresh Data` to get the same result of getting data since at that moment it's empty.
 
