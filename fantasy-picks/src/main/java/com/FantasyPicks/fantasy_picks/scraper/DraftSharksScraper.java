@@ -3,6 +3,7 @@ package com.FantasyPicks.fantasy_picks.scraper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +27,9 @@ public class DraftSharksScraper implements RankingScraper {
     private static final String SOURCE_ID = "draftsharks";
     private static final String SOURCE_NAME = "DraftSharks";
 
+    /** Positions we care about in fantasy — offensive skill players, kickers, and team defense. */
+    private static final Set<String> ALLOWED_POSITIONS = Set.of("QB", "RB", "WR", "TE", "K", "DEF");
+
     @Override
     public String getSourceId() {
         return SOURCE_ID;
@@ -46,10 +50,10 @@ public class DraftSharksScraper implements RankingScraper {
                 BrowserContext context = browser.newContext(new Browser.NewContextOptions()
                         .setUserAgent(
                                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                                .setViewportSize(1280, 800)); // Set to pretend to be a desktop monitor
+                        .setViewportSize(1280, 800)); // Set to pretend to be a desktop monitor
 
                 context.addInitScript("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})");
-                
+
                 Page page = context.newPage();
 
                 String url = getUrlForLeagueType(leagueType);
@@ -74,46 +78,60 @@ public class DraftSharksScraper implements RankingScraper {
                     page.waitForTimeout(2000);
 
                     // Take a screenshot for debugging
-                    // page.screenshot(new Page.ScreenshotOptions().setPath(java.nio.file.Paths.get("headless-debug.png")));
+                    // page.screenshot(new
+                    // Page.ScreenshotOptions().setPath(java.nio.file.Paths.get("headless-debug.png")));
 
                     // Extract data directly in the browser via JavaScript evaluation.
                     // IMPORTANT: No single-line comments (//) in this JS string — the Java
-                    // concatenation produces one long line, so // would swallow all subsequent code.
+                    // concatenation produces one long line, so // would swallow all subsequent
+                    // code.
                     @SuppressWarnings("unchecked")
                     List<Map<String, Object>> extractedData = (List<Map<String, Object>>) page.evaluate(
                             "() => {\n" +
-                            "  const results = [];\n" +
-                            "  const containers = document.querySelectorAll('tbody[data-player-row]');\n" +
-                            "  containers.forEach((container, index) => {\n" +
-                            "    const name = container.getAttribute('data-player-name') || '';\n" +
-                            "    const pos = container.getAttribute('data-fantasy-position') || '';\n" +
-                            "    let team = 'FA';\n" +
-                            "    const teamSpan = container.querySelector('.team-position-logo-container span');\n" +
-                            "    if (teamSpan) team = teamSpan.textContent.trim();\n" +
-                            "    let rank = index + 1;\n" +
-                            "    const rankTd = container.querySelector('td.rank');\n" +
-                            "    if (rankTd) {\n" +
-                            "      const rankVal = parseInt(rankTd.textContent.replace(/[^0-9]/g, ''));\n" +
-                            "      if (!isNaN(rankVal)) rank = rankVal;\n" +
-                            "    }\n" +
-                            "    if (name) {\n" +
-                            "      results.push({ name: name, position: pos, team: team, rank: rank });\n" +
-                            "    }\n" +
-                            "  });\n" +
-                            "  return results;\n" +
-                            "}");
+                                    "  const results = [];\n" +
+                                    "  const containers = document.querySelectorAll('tbody[data-player-row]');\n" +
+                                    "  containers.forEach((container, index) => {\n" +
+                                    "    const name = container.getAttribute('data-player-name') || '';\n" +
+                                    "    const pos = container.getAttribute('data-fantasy-position') || '';\n" +
+                                    "    let team = 'FA';\n" +
+                                    "    const teamSpan = container.querySelector('.team-position-logo-container span');\n"
+                                    +
+                                    "    if (teamSpan) team = teamSpan.textContent.trim();\n" +
+                                    "    let rank = index + 1;\n" +
+                                    "    const rankTd = container.querySelector('td.rank');\n" +
+                                    "    if (rankTd) {\n" +
+                                    "      const rankVal = parseInt(rankTd.textContent.replace(/[^0-9]/g, ''));\n" +
+                                    "      if (!isNaN(rankVal)) rank = rankVal;\n" +
+                                    "    }\n" +
+                                    "    if (name) {\n" +
+                                    "      results.push({ name: name, position: pos, team: team, rank: rank });\n" +
+                                    "    }\n" +
+                                    "  });\n" +
+                                    "  return results;\n" +
+                                    "}");
 
                     log.info("DraftSharks browser evaluation returned {} players", extractedData.size());
 
+                    int skippedCount = 0;
                     for (Map<String, Object> p : extractedData) {
                         String name = (String) p.get("name");
-                        String pos = (String) p.get("position");
+                        String pos = normalizePosition((String) p.get("position"));
                         String team = (String) p.get("team");
                         int rank = (int) p.get("rank");
 
-                        PlayerRanking player = new PlayerRanking(name, normalizePosition(pos), team);
+                        // Filter out individual defensive players (LB, CB, S, DE, DT, etc.)
+                        if (!ALLOWED_POSITIONS.contains(pos)) {
+                            skippedCount++;
+                            continue;
+                        }
+
+                        PlayerRanking player = new PlayerRanking(name, pos, team);
                         player.addSourceRanking(SOURCE_ID, rank);
                         players.add(player);
+                    }
+
+                    if (skippedCount > 0) {
+                        log.info("Filtered out {} non-fantasy positions (defensive players, etc.)", skippedCount);
                     }
 
                     if (players.isEmpty()) {
