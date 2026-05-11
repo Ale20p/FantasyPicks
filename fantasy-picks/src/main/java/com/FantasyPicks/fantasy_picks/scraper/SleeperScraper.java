@@ -32,7 +32,7 @@ public class SleeperScraper implements RankingScraper {
     private static final String SOURCE_NAME = "Sleeper";
 
     /** Fantasy-relevant positions to keep */
-    private static final Set<String> FANTASY_POSITIONS = Set.of("QB", "RB", "WR", "TE", "K", "PK", "DEF");
+    private static final Set<String> FANTASY_POSITIONS = Set.of("QB", "RB", "WR", "TE", "K", "PK", "DEF", "DST");
 
     /** Ignore players with ADP at or above this threshold */
     private static final double MAX_ADP = 500.0;
@@ -64,7 +64,7 @@ public class SleeperScraper implements RankingScraper {
 
     private String getUrlForLeagueType(int year, String leagueType) {
         String base = "https://api.sleeper.com/projections/nfl/" + year + 
-                      "?season_type=regular&position[]=DEF&position[]=K&position[]=QB&position[]=RB&position[]=TE&position[]=WR&order_by=";
+                      "?season_type=regular&position%5B%5D=DEF&position%5B%5D=K&position%5B%5D=QB&position%5B%5D=RB&position%5B%5D=TE&position%5B%5D=WR&order_by=";
         return base + getAdpKeyForLeagueType(leagueType);
     }
 
@@ -104,10 +104,14 @@ public class SleeperScraper implements RankingScraper {
                 for (JsonNode node : root) {
                     JsonNode statsNode = node.path("stats");
                     double adp = statsNode.path(adpKey).asDouble(999.0);
-                    if (adp >= MAX_ADP) continue;
 
                     PlayerRanking ranking = parsePlayer(node);
                     if (ranking != null) {
+                        String pos = ranking.getPosition();
+                        // Kickers and Defenses often have ADP 999.0 because they are drafted very late.
+                        if (adp >= MAX_ADP && !"DEF".equals(pos) && !"K".equals(pos)) {
+                            continue;
+                        }
                         ranking.addSourceRanking(SOURCE_ID, rank++);
                         players.add(ranking);
                     }
