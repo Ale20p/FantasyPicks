@@ -32,23 +32,23 @@ public class PlayerService {
 
     private final Map<String, RankingScraper> scraperMap;
     private final PlayerNormalizer normalizer;
-    
+
     private final PprPlayerRankingRepository pprRepo;
     private final HalfPprPlayerRankingRepository halfPprRepo;
     private final StandardPlayerRankingRepository standardRepo;
     private final ScrapeMetadataRepository metadataRepo;
 
     public PlayerService(List<RankingScraper> scrapers, PlayerNormalizer normalizer,
-                         PprPlayerRankingRepository pprRepo,
-                         HalfPprPlayerRankingRepository halfPprRepo,
-                         StandardPlayerRankingRepository standardRepo,
-                         ScrapeMetadataRepository metadataRepo) {
+            PprPlayerRankingRepository pprRepo,
+            HalfPprPlayerRankingRepository halfPprRepo,
+            StandardPlayerRankingRepository standardRepo,
+            ScrapeMetadataRepository metadataRepo) {
         this.normalizer = normalizer;
         this.pprRepo = pprRepo;
         this.halfPprRepo = halfPprRepo;
         this.standardRepo = standardRepo;
         this.metadataRepo = metadataRepo;
-        
+
         this.scraperMap = new LinkedHashMap<>();
         for (RankingScraper scraper : scrapers) {
             scraperMap.put(scraper.getSourceId(), scraper);
@@ -67,12 +67,13 @@ public class PlayerService {
                 .filter(s -> !s.isEmpty())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        log.info("Fetching rankings: sources={}, year={}, leagueType={}, refresh={}", sourceIds, year, leagueType, refresh);
+        log.info("Fetching rankings: sources={}, year={}, leagueType={}, refresh={}", sourceIds, year, leagueType,
+                refresh);
 
         Optional<ScrapeMetadataEntity> metadataOpt = metadataRepo.findByYearAndLeagueType(year, leagueType);
         boolean shouldScrape = false;
         int currentYear = java.time.Year.now().getValue();
-        
+
         if (metadataOpt.isEmpty()) {
             shouldScrape = true;
         } else {
@@ -98,7 +99,7 @@ public class PlayerService {
         Map<String, String> sourceStatuses = new HashMap<>();
         List<PlayerRanking> players;
         boolean updateSuccess = false;
-        
+
         if (shouldScrape) {
             log.info("Scraping fresh data...");
             players = scrapeAndMerge(sourceIds, year, leagueType, sourceStatuses);
@@ -123,10 +124,10 @@ public class PlayerService {
                 }
             }
         }
-        
+
         computeOverallRanks(players, sourceIds);
         players.sort(Comparator.comparingInt(PlayerRanking::getOverallRank));
-        
+
         PlayerApiResponse response = new PlayerApiResponse(players);
         response.setSourceStatuses(sourceStatuses);
         metadataOpt = metadataRepo.findByYearAndLeagueType(year, leagueType);
@@ -134,11 +135,12 @@ public class PlayerService {
             // Send ISO string for JS
             response.setLastUpdated(metadataOpt.get().getLastUpdated().toInstant(ZoneOffset.UTC).toString());
         }
-        
+
         return response;
     }
 
-    private List<PlayerRanking> scrapeAndMerge(Set<String> sourceIds, int year, String leagueType, Map<String, String> sourceStatuses) {
+    private List<PlayerRanking> scrapeAndMerge(Set<String> sourceIds, int year, String leagueType,
+            Map<String, String> sourceStatuses) {
         Map<String, PlayerRanking> mergedPlayers = new LinkedHashMap<>();
 
         for (String sourceId : sourceIds) {
@@ -162,8 +164,35 @@ public class PlayerService {
                 for (PlayerRanking player : scraped) {
                     player.setTeam(normalizer.normalizeTeam(player.getTeam()));
                     String key = normalizer.buildNormalizedKey(player.getName(), player.getTeam());
-                    PlayerRanking existing = mergedPlayers.get(key);
+                    
+                    // Fuzzy matching for players on "FA" (Free Agent / Unsigned)
+                    if ("FA".equals(player.getTeam())) {
+                        // Try to find a match by name and position regardless of team
+                        String nameKey = normalizer.normalizeName(player.getName());
+                        Optional<PlayerRanking> match = mergedPlayers.values().stream()
+                            .filter(p -> normalizer.normalizeName(p.getName()).equals(nameKey) 
+                                     && p.getPosition().equals(player.getPosition()))
+                            .findFirst();
+                        
+                        if (match.isPresent()) {
+                            match.get().getRankings().putAll(player.getRankings());
+                            continue; // Already merged
+                        }
+                    } else {
+                        // If this player HAS a team, check if we already have an "FA" version of them
+                        String nameKey = normalizer.normalizeName(player.getName());
+                        String faKey = nameKey + "|fa";
+                        PlayerRanking existingFa = mergedPlayers.get(faKey);
+                        if (existingFa != null && existingFa.getPosition().equals(player.getPosition())) {
+                            // Merge the FA's rankings into this one and replace it
+                            player.getRankings().putAll(existingFa.getRankings());
+                            mergedPlayers.remove(faKey);
+                            mergedPlayers.put(key, player);
+                            continue;
+                        }
+                    }
 
+                    PlayerRanking existing = mergedPlayers.get(key);
                     if (existing == null) {
                         mergedPlayers.put(key, player);
                     } else {
@@ -181,7 +210,8 @@ public class PlayerService {
         return new ArrayList<>(mergedPlayers.values());
     }
 
-    private List<PlayerRanking> loadFromDatabase(int year, String leagueType, Set<String> sourceIds, Map<String, String> sourceStatuses) {
+    private List<PlayerRanking> loadFromDatabase(int year, String leagueType, Set<String> sourceIds,
+            Map<String, String> sourceStatuses) {
         List<? extends BasePlayerRankingEntity> entities;
         if ("ppr".equalsIgnoreCase(leagueType)) {
             entities = pprRepo.findByYearOrderByOverallRankAsc(year);

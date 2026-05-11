@@ -18,9 +18,11 @@ import java.util.*;
  * Scrapes player rankings from the Sleeper public API.
  *
  * Strategy:
- * 1. Hit the specific /projections/nfl/{year} endpoint based on the league type (PPR, Half-PPR, Standard)
+ * 1. Hit the specific /projections/nfl/{year} endpoint based on the league type
+ * (PPR, Half-PPR, Standard)
  * 2. Filter for fantasy-relevant, active, rostered players with a valid ADP.
- * 3. Use the returned sorted order (which is ordered by the requested adp format)
+ * 3. Use the returned sorted order (which is ordered by the requested adp
+ * format)
  * 4. Assign sequential 1..N ranking
  */
 @Component
@@ -54,7 +56,8 @@ public class SleeperScraper implements RankingScraper {
     }
 
     private String getAdpKeyForLeagueType(String leagueType) {
-        if (leagueType == null) return "adp_ppr";
+        if (leagueType == null)
+            return "adp_ppr";
         return switch (leagueType.toLowerCase()) {
             case "half_ppr" -> "adp_half_ppr";
             case "standard" -> "adp_std";
@@ -63,8 +66,8 @@ public class SleeperScraper implements RankingScraper {
     }
 
     private String getUrlForLeagueType(int year, String leagueType) {
-        String base = "https://api.sleeper.com/projections/nfl/" + year + 
-                      "?season_type=regular&position%5B%5D=DEF&position%5B%5D=K&position%5B%5D=QB&position%5B%5D=RB&position%5B%5D=TE&position%5B%5D=WR&order_by=";
+        String base = "https://api.sleeper.com/projections/nfl/" + year +
+                "?season_type=regular&position%5B%5D=DEF&position%5B%5D=K&position%5B%5D=QB&position%5B%5D=RB&position%5B%5D=TE&position%5B%5D=WR&order_by=";
         return base + getAdpKeyForLeagueType(leagueType);
     }
 
@@ -76,7 +79,7 @@ public class SleeperScraper implements RankingScraper {
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(apiUrl))
-                    .timeout(Duration.ofSeconds(45)) 
+                    .timeout(Duration.ofSeconds(45))
                     .header("Accept", "application/json")
                     .header("User-Agent", "FantasyPicks/1.0")
                     .GET()
@@ -98,7 +101,7 @@ public class SleeperScraper implements RankingScraper {
             // The root is a JSON array
             List<PlayerRanking> players = new ArrayList<>();
             String adpKey = getAdpKeyForLeagueType(leagueType);
-            
+
             if (root.isArray()) {
                 for (int i = 0; i < root.size(); i++) {
                     JsonNode node = root.get(i);
@@ -112,7 +115,7 @@ public class SleeperScraper implements RankingScraper {
                         if (adp >= MAX_ADP && !"DEF".equals(pos) && !"K".equals(pos)) {
                             continue;
                         }
-                        
+
                         // Use the exact position in the JSON as the rank (0-indexed -> 1-indexed)
                         ranking.addSourceRanking(SOURCE_ID, i + 1);
                         players.add(ranking);
@@ -146,20 +149,33 @@ public class SleeperScraper implements RankingScraper {
         if (position == null || !FANTASY_POSITIONS.contains(position))
             return null;
 
-        // Must be on a team (check player node first, fallback to root node)
+        // Resolve team (check player node first, fallback to root node)
         String team = playerNode.path("team").asText("");
+        if (team.isEmpty() || "null".equals(team)) {
+            team = playerNode.path("team_abbr").asText("");
+        }
         if (team.isEmpty() || "null".equals(team)) {
             team = node.path("team").asText("");
         }
-        if (team.isEmpty() || "null".equals(team))
-            return null;
+        
+        // If still empty, default to "FA" instead of rejecting the player
+        if (team.isEmpty() || "null".equals(team)) {
+            team = "FA";
+        }
 
         // Must have a name
         String fullName = playerNode.path("full_name").asText("");
         if (fullName.isBlank()) {
             String firstName = playerNode.path("first_name").asText("");
             String lastName = playerNode.path("last_name").asText("");
-            fullName = (firstName + " " + lastName).trim();
+            
+            if (lastName.isBlank() && firstName.contains(" ")) {
+                // Handle case where "shifted" fields might put the full name in first_name
+                fullName = firstName.trim();
+            } else {
+                fullName = (firstName + " " + lastName).trim();
+            }
+            
             if (fullName.isBlank()) {
                 // If it's a DEF and we have no name, use team abbreviation + " DEF"
                 if ("DEF".equals(normalizePosition(position))) {
@@ -174,6 +190,11 @@ public class SleeperScraper implements RankingScraper {
                 fullName,
                 normalizePosition(position),
                 team.toUpperCase());
+        
+        if ("FA".equals(team)) {
+            log.debug("Sleeper: Player {} has no team, using FA", fullName);
+        }
+        
         return ranking;
     }
 
