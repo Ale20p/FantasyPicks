@@ -97,11 +97,11 @@ public class SleeperScraper implements RankingScraper {
 
             // The root is a JSON array
             List<PlayerRanking> players = new ArrayList<>();
+            String adpKey = getAdpKeyForLeagueType(leagueType);
             
             if (root.isArray()) {
-                String adpKey = getAdpKeyForLeagueType(leagueType);
-                int rank = 1;
-                for (JsonNode node : root) {
+                for (int i = 0; i < root.size(); i++) {
+                    JsonNode node = root.get(i);
                     JsonNode statsNode = node.path("stats");
                     double adp = statsNode.path(adpKey).asDouble(999.0);
 
@@ -112,7 +112,9 @@ public class SleeperScraper implements RankingScraper {
                         if (adp >= MAX_ADP && !"DEF".equals(pos) && !"K".equals(pos)) {
                             continue;
                         }
-                        ranking.addSourceRanking(SOURCE_ID, rank++);
+                        
+                        // Use the exact position in the JSON as the rank (0-indexed -> 1-indexed)
+                        ranking.addSourceRanking(SOURCE_ID, i + 1);
                         players.add(ranking);
                     }
                 }
