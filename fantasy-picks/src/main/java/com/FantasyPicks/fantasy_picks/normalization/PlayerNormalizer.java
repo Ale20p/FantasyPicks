@@ -11,15 +11,18 @@ import java.util.regex.Pattern;
 /**
  * Normalization Layer for player and team data.
  *
- * Different data sources format player names and team abbreviations inconsistently.
+ * Different data sources format player names and team abbreviations
+ * inconsistently.
  * For example:
- *   - "Patrick Mahomes II" (ESPN) vs "Patrick Mahomes" (FantasyPros)
- *   - "Amon-Ra St. Brown" vs "Amon-Ra St Brown"
- *   - "D.J. Moore" vs "DJ Moore"
- *   - "KAN" vs "KC" vs "Kansas City Chiefs"
+ * - "Patrick Mahomes II" (ESPN) vs "Patrick Mahomes" (FantasyPros)
+ * - "Amon-Ra St. Brown" vs "Amon-Ra St Brown"
+ * - "D.J. Moore" vs "DJ Moore"
+ * - "KAN" vs "KC" vs "Kansas City Chiefs"
  *
- * This class provides deterministic normalization so that the same player always
- * produces the same deduplication key regardless of which source provided the data.
+ * This class provides deterministic normalization so that the same player
+ * always
+ * produces the same deduplication key regardless of which source provided the
+ * data.
  */
 @Component
 public class PlayerNormalizer {
@@ -32,13 +35,13 @@ public class PlayerNormalizer {
 
     /** Suffixes to strip (case-insensitive matching) */
     private static final Pattern SUFFIX_PATTERN = Pattern.compile(
-            "\\s+(jr\\.?|sr\\.?|ii|iii|iv|v)$", Pattern.CASE_INSENSITIVE);
+            "[,]?\\s+(jr\\.?|sr\\.?|ii|iii|iv|v)$", Pattern.CASE_INSENSITIVE);
 
     /** Periods used in initials: "D.J." → "DJ", "T.J." → "TJ" */
     private static final Pattern PERIOD_PATTERN = Pattern.compile("\\.");
 
-    /** Apostrophes and similar characters */
-    private static final Pattern APOSTROPHE_PATTERN = Pattern.compile("[''`]");
+    /** Apostrophes and similar characters (including smart quotes) */
+    private static final Pattern APOSTROPHE_PATTERN = Pattern.compile("[''`’]");
 
     /** Multiple consecutive spaces */
     private static final Pattern MULTI_SPACE_PATTERN = Pattern.compile("\\s{2,}");
@@ -54,31 +57,36 @@ public class PlayerNormalizer {
             Map.entry("ken walker iii", "kenneth walker"),
             Map.entry("kenneth walker iii", "kenneth walker"),
             Map.entry("ken walker", "kenneth walker"),
+            Map.entry("cam skattebo", "cameron skattebo"),
+            Map.entry("cam ward", "cameron ward"),
+            Map.entry("deebo samuel sr.", "deebo samuel"),
+            Map.entry("deebo samuel sr", "deebo samuel"),
+            Map.entry("tyshun samuel", "deebo samuel"),
 
             // Defense/Special teams naming
             Map.entry("chiefs d/st", "kansas city defense"),
             Map.entry("chiefs defense", "kansas city defense"),
             Map.entry("49ers d/st", "san francisco defense"),
-            Map.entry("49ers defense", "san francisco defense")
-    );
+            Map.entry("49ers defense", "san francisco defense"));
 
     /**
      * Normalize a player name for use in deduplication keys.
      *
      * Steps:
-     *   1. Lowercase and trim
-     *   2. Normalize Unicode (accented chars → ASCII equivalents)
-     *   3. Remove suffixes (Jr., Sr., II, III, IV, V)
-     *   4. Remove periods (D.J. → DJ)
-     *   5. Remove apostrophes (D'Andre → DAndre)
-     *   6. Collapse multiple spaces
-     *   7. Apply known nickname → canonical name mappings
+     * 1. Lowercase and trim
+     * 2. Normalize Unicode (accented chars → ASCII equivalents)
+     * 3. Remove suffixes (Jr., Sr., II, III, IV, V)
+     * 4. Remove periods (D.J. → DJ)
+     * 5. Remove apostrophes (D'Andre → DAndre)
+     * 6. Collapse multiple spaces
+     * 7. Apply known nickname → canonical name mappings
      *
      * @param rawName the player name as returned by a scraper
      * @return a normalized, deterministic string for matching
      */
     public String normalizeName(String rawName) {
-        if (rawName == null || rawName.isBlank()) return "";
+        if (rawName == null || rawName.isBlank())
+            return "";
 
         String name = rawName.trim().toLowerCase();
 
@@ -111,8 +119,10 @@ public class PlayerNormalizer {
     // ═══════════════════════════════════════════════════════════════
 
     /**
-     * Comprehensive mapping of every known team name variant → standard 2-3 letter abbreviation.
-     * Covers: full names, city names, mascot names, alternate abbreviations from various APIs.
+     * Comprehensive mapping of every known team name variant → standard 2-3 letter
+     * abbreviation.
+     * Covers: full names, city names, mascot names, alternate abbreviations from
+     * various APIs.
      */
     private static final Map<String, String> TEAM_ALIASES = Map.ofEntries(
             // Arizona Cardinals
@@ -250,8 +260,8 @@ public class PlayerNormalizer {
             Map.entry("commanders", "WAS"), Map.entry("washington commanders", "WAS"),
 
             // Free Agent / Unknown
-            Map.entry("fa", "FA"), Map.entry("free agent", "FA")
-    );
+            Map.entry("fa", "FA"), Map.entry("free agent", "FA"),
+            Map.entry("uns", "FA"), Map.entry("unsigned", "FA"));
 
     /**
      * Normalize a team name or abbreviation to its standard form.
@@ -261,7 +271,8 @@ public class PlayerNormalizer {
      *         uppercased value if no mapping is found
      */
     public String normalizeTeam(String rawTeam) {
-        if (rawTeam == null || rawTeam.isBlank()) return "FA";
+        if (rawTeam == null || rawTeam.isBlank())
+            return "FA";
 
         String key = rawTeam.trim().toLowerCase();
         String mapped = TEAM_ALIASES.get(key);
@@ -276,8 +287,8 @@ public class PlayerNormalizer {
      * Build a normalized deduplication key for a player.
      * This is the single method that PlayerService should use for merging.
      *
-     * @param name     raw player name
-     * @param team     raw team abbreviation/name
+     * @param name raw player name
+     * @param team raw team abbreviation/name
      * @return a normalized key like "patrick mahomes|kc"
      */
     public String buildNormalizedKey(String name, String team) {
