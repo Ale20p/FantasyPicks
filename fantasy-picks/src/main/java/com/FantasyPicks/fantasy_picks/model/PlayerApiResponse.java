@@ -11,6 +11,7 @@ public class PlayerApiResponse {
 
     private List<PlayerRanking> players;
     private String lastUpdated;
+    private java.util.Map<String, String> sourceStatuses = new java.util.HashMap<>();
 
     public PlayerApiResponse() {
     }
@@ -36,5 +37,13 @@ public class PlayerApiResponse {
 
     public void setLastUpdated(String lastUpdated) {
         this.lastUpdated = lastUpdated;
+    }
+
+    public java.util.Map<String, String> getSourceStatuses() {
+        return sourceStatuses;
+    }
+
+    public void setSourceStatuses(java.util.Map<String, String> sourceStatuses) {
+        this.sourceStatuses = sourceStatuses;
     }
 }

@@ -95,26 +95,27 @@ public class PlayerService {
             }
         }
 
+        Map<String, String> sourceStatuses = new HashMap<>();
         List<PlayerRanking> players;
         boolean updateSuccess = false;
         
         if (shouldScrape) {
             log.info("Scraping fresh data...");
-            players = scrapeAndMerge(sourceIds, year, leagueType);
+            players = scrapeAndMerge(sourceIds, year, leagueType, sourceStatuses);
             if (!players.isEmpty()) {
                 saveToDatabase(players, year, leagueType);
                 updateMetadata(year, leagueType);
                 updateSuccess = true;
             } else {
                 log.error("Scraping returned no data! Using old data from DB.");
-                players = loadFromDatabase(year, leagueType, sourceIds);
+                players = loadFromDatabase(year, leagueType, sourceIds, sourceStatuses);
             }
         } else {
             log.info("Loading data from database...");
-            players = loadFromDatabase(year, leagueType, sourceIds);
+            players = loadFromDatabase(year, leagueType, sourceIds, sourceStatuses);
             if (players.isEmpty()) {
                 log.info("DB is empty, fallback to scraping...");
-                players = scrapeAndMerge(sourceIds, year, leagueType);
+                players = scrapeAndMerge(sourceIds, year, leagueType, sourceStatuses);
                 if (!players.isEmpty()) {
                     saveToDatabase(players, year, leagueType);
                     updateMetadata(year, leagueType);
@@ -127,6 +128,7 @@ public class PlayerService {
         players.sort(Comparator.comparingInt(PlayerRanking::getOverallRank));
         
         PlayerApiResponse response = new PlayerApiResponse(players);
+        response.setSourceStatuses(sourceStatuses);
         metadataOpt = metadataRepo.findByYearAndLeagueType(year, leagueType);
         if (metadataOpt.isPresent()) {
             // Send ISO string for JS
@@ -136,19 +138,26 @@ public class PlayerService {
         return response;
     }
 
-    private List<PlayerRanking> scrapeAndMerge(Set<String> sourceIds, int year, String leagueType) {
+    private List<PlayerRanking> scrapeAndMerge(Set<String> sourceIds, int year, String leagueType, Map<String, String> sourceStatuses) {
         Map<String, PlayerRanking> mergedPlayers = new LinkedHashMap<>();
 
         for (String sourceId : sourceIds) {
             RankingScraper scraper = scraperMap.get(sourceId);
             if (scraper == null) {
                 log.warn("Unknown source requested: '{}' — skipping", sourceId);
+                sourceStatuses.put(sourceId, "ERROR");
                 continue;
             }
 
             try {
                 List<PlayerRanking> scraped = scraper.scrapeRankings(year, leagueType);
                 log.info("Source '{}' returned {} players", sourceId, scraped.size());
+
+                if (scraped.isEmpty()) {
+                    sourceStatuses.put(sourceId, "ERROR");
+                } else {
+                    sourceStatuses.put(sourceId, "SUCCESS");
+                }
 
                 for (PlayerRanking player : scraped) {
                     player.setTeam(normalizer.normalizeTeam(player.getTeam()));
@@ -163,12 +172,16 @@ public class PlayerService {
                 }
             } catch (ScrapingException e) {
                 log.error("Failed to scrape from '{}': {}", sourceId, e.getMessage());
+                sourceStatuses.put(sourceId, "ERROR");
+            } catch (Exception e) {
+                log.error("Unexpected error for source '{}': {}", sourceId, e.getMessage());
+                sourceStatuses.put(sourceId, "ERROR");
             }
         }
         return new ArrayList<>(mergedPlayers.values());
     }
 
-    private List<PlayerRanking> loadFromDatabase(int year, String leagueType, Set<String> sourceIds) {
+    private List<PlayerRanking> loadFromDatabase(int year, String leagueType, Set<String> sourceIds, Map<String, String> sourceStatuses) {
         List<? extends BasePlayerRankingEntity> entities;
         if ("ppr".equalsIgnoreCase(leagueType)) {
             entities = pprRepo.findByYearOrderByOverallRankAsc(year);
@@ -178,7 +191,7 @@ public class PlayerService {
             entities = standardRepo.findByYearOrderByOverallRankAsc(year);
         }
 
-        return entities.stream().map(e -> {
+        List<PlayerRanking> result = entities.stream().map(e -> {
             PlayerRanking p = new PlayerRanking();
             p.setName(e.getName());
             p.setTeam(e.getTeam());
@@ -195,6 +208,13 @@ public class PlayerService {
             p.setRankings(rankings);
             return p;
         }).collect(Collectors.toList());
+
+        for (String sourceId : sourceIds) {
+            boolean hasData = result.stream().anyMatch(p -> p.getRankings().containsKey(sourceId));
+            sourceStatuses.put(sourceId, hasData ? "SUCCESS" : "ERROR");
+        }
+
+        return result;
     }
 
     private void saveToDatabase(List<PlayerRanking> players, int year, String leagueType) {

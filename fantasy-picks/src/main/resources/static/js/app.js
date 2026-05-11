@@ -92,6 +92,9 @@ function renderSourceCards() {
                 <div class="source-card-name">${src.name}</div>
                 <div class="source-card-desc">${src.desc}</div>
             </div>
+            <div class="source-progress-container">
+                <div class="source-progress-bar"></div>
+            </div>
         </div>
     `).join('');
 }
@@ -258,6 +261,15 @@ async function fetchPlayerData(forceRefresh = false) {
 
     setLoading(true);
 
+    // Set loading state on selected cards
+    state.selectedSources.forEach(sourceId => {
+        const card = document.getElementById(`source-card-${sourceId}`);
+        if (card) {
+            card.classList.remove('has-result', 'success', 'error');
+            card.classList.add('is-loading');
+        }
+    });
+
     try {
         const sourcesParam = [...state.selectedSources].join(',');
         const yearParam = state.selectedYear || new Date().getFullYear();
@@ -297,11 +309,37 @@ async function fetchPlayerData(forceRefresh = false) {
         renderTable();
         updateStats(data);
 
+        // Update cards based on sourceStatuses
+        if (data.sourceStatuses) {
+            state.selectedSources.forEach(sourceId => {
+                const card = document.getElementById(`source-card-${sourceId}`);
+                if (card) {
+                    card.classList.remove('is-loading');
+                    card.classList.add('has-result');
+                    const status = data.sourceStatuses[sourceId];
+                    if (status === 'SUCCESS') {
+                        card.classList.add('success');
+                    } else {
+                        card.classList.add('error');
+                    }
+                }
+            });
+        }
+
         showToast(`Loaded ${state.players.length} players from ${state.selectedSources.size} source(s) for ${state.selectedYear} season.`, 'success');
     } catch (err) {
         console.error('Failed to fetch player data:', err);
         showError(err.message || 'Could not load player data.');
         showToast('Failed to fetch player data. Is the backend running?', 'error');
+        
+        // Mark all as error on network failure
+        state.selectedSources.forEach(sourceId => {
+            const card = document.getElementById(`source-card-${sourceId}`);
+            if (card) {
+                card.classList.remove('is-loading');
+                card.classList.add('has-result', 'error');
+            }
+        });
     } finally {
         setLoading(false);
     }
