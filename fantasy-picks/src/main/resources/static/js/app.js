@@ -13,8 +13,7 @@ const API_BASE = '';  // Same-origin — Spring Boot serves both the API and sta
 const DATA_SOURCES = [
     { id: 'sleeper', name: 'Sleeper', desc: 'Sleeper app consensus rankings.' },
     { id: 'fantasypros', name: 'FantasyPros', desc: 'FantasyPros expert consensus rankings (ECR).' },
-    { id: 'draftsharks', name: 'DraftSharks', desc: 'DraftSharks award-winning projections and rankings.' },
-    { id: 'espn', name: 'ESPN', desc: 'ESPN fantasy football rankings and projections.' }
+    { id: 'draftsharks', name: 'DraftSharks', desc: 'DraftSharks award-winning projections and rankings.' }
 ];
 
 // NFL Teams for the team filter dropdown
@@ -331,7 +330,7 @@ async function fetchPlayerData(forceRefresh = false) {
         console.error('Failed to fetch player data:', err);
         showError(err.message || 'Could not load player data.');
         showToast('Failed to fetch player data. Is the backend running?', 'error');
-        
+
         // Mark all as error on network failure
         state.selectedSources.forEach(sourceId => {
             const card = document.getElementById(`source-card-${sourceId}`);

@@ -8,9 +8,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
 
@@ -37,15 +39,15 @@ public class ESPNScraper implements RankingScraper {
     private static final String SOURCE_ID = "espn";
     private static final String SOURCE_NAME = "ESPN";
 
-    private static final String API_TEMPLATE = "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/%d/segments/0/leaguefree?view=kona_player_info";
+    private static final String API_TEMPLATE = "https://fantasy.espn.com/apis/v3/games/ffl/seasons/%d/segments/0/leaguefree?view=kona_player_info";
 
-    /** Filter header requesting players sorted by STANDARD draft rank, top 300 */
-    private static final String FANTASY_FILTER_TEMPLATE = "{\"players\":{\"filterSlotIds\":{\"value\":[0,2,4,6,16,17]},"
-            +
-            "\"sortDraftRanks\":{\"sortPriority\":100,\"sortAscending\":true,\"value\":\"STANDARD\"}," +
-            "\"limit\":%d,\"offset\":0}}";
+    /** Filter header requesting players sorted by draft rank, top 500 */
+    private static final String FANTASY_FILTER_TEMPLATE = "{\"players\":{\"filterSlotIds\":{\"value\":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,23,24]},"
+            + "\"filterStatsForTopScoringPeriodIds\":{\"value\":2,\"additionalValue\":[\"00%d\",\"10%d\",\"11%d\"]},"
+            + "\"sortDraftRanks\":{\"sortPriority\":100,\"sortAsc\":true,\"value\":\"%s\"}," 
+            + "\"limit\":%d,\"offset\":0}}";
 
-    private static final int PLAYER_LIMIT = 300;
+    private static final int PLAYER_LIMIT = 500;
 
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36";
@@ -87,13 +89,16 @@ public class ESPNScraper implements RankingScraper {
 
     @Override
     public List<PlayerRanking> scrapeRankings(int year, String leagueType) throws ScrapingException {
+        String espnRankType = getEspnRankType(leagueType);
+        log.info("ESPN: Scraping rankings for year {}, leagueType {} (ESPN rank type: {})", year, leagueType, espnRankType);
+
         // Try the requested year first, fall back to the previous year if 404
-        List<PlayerRanking> result = tryFetchForSeason(year);
+        List<PlayerRanking> result = tryFetchForSeason(year, espnRankType);
         if (result != null)
             return result;
 
         log.warn("ESPN: {} season data not available, trying {}", year, year - 1);
-        result = tryFetchForSeason(year - 1);
+        result = tryFetchForSeason(year - 1, espnRankType);
         if (result != null)
             return result;
 
@@ -106,24 +111,29 @@ public class ESPNScraper implements RankingScraper {
     // FETCHING
     // ═══════════════════════════════════════════════════════════════
 
-    private List<PlayerRanking> tryFetchForSeason(int season) throws ScrapingException {
+    private List<PlayerRanking> tryFetchForSeason(int season, String rankType) throws ScrapingException {
         String url = String.format(API_TEMPLATE, season);
-        String filter = String.format(FANTASY_FILTER_TEMPLATE, PLAYER_LIMIT);
+        String filter = String.format(FANTASY_FILTER_TEMPLATE, season, season, season, rankType, PLAYER_LIMIT);
 
-        log.info("ESPN: fetching from {} (season {})", url, season);
+        log.info("ESPN: fetching from {} (season {}, rankType {})", url, season, rankType);
 
         try {
+            String encodedFilter = URLEncoder.encode(filter, StandardCharsets.UTF_8);
+
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .timeout(Duration.ofSeconds(20))
                     .header("Accept", "application/json")
                     .header("User-Agent", USER_AGENT)
-                    .header("X-Fantasy-Filter", filter)
+                    .header("X-Fantasy-Filter", filter) 
+                    .header("X-Fantasy-Source", "kona")
                     .GET()
                     .build();
 
             HttpResponse<String> response = httpClient.send(request,
                     HttpResponse.BodyHandlers.ofString());
+
+            log.info("ESPN: Status code: {}, body length: {}", response.statusCode(), response.body().length());
 
             if (response.statusCode() == 404) {
                 log.info("ESPN: season {} returned 404", season);
@@ -131,11 +141,13 @@ public class ESPNScraper implements RankingScraper {
             }
 
             if (response.statusCode() != 200) {
+                log.error("ESPN API Error: HTTP {} - {}", response.statusCode(), 
+                    response.body().substring(0, Math.min(100, response.body().length())));
                 throw new ScrapingException(SOURCE_ID,
                         "ESPN API returned HTTP " + response.statusCode());
             }
 
-            return parseResponse(response.body());
+            return parseResponse(response.body(), rankType);
 
         } catch (ScrapingException e) {
             throw e;
@@ -145,11 +157,20 @@ public class ESPNScraper implements RankingScraper {
         }
     }
 
+    private String getEspnRankType(String leagueType) {
+        if (leagueType == null) return "STANDARD";
+        return switch (leagueType.toLowerCase()) {
+            case "ppr", "1_ppr" -> "PPR";
+            case "half_ppr", "0.5_ppr" -> "PPR"; // ESPN doesn't natively expose HALF_PPR rankings; PPR is the closest match
+            default -> "STANDARD";
+        };
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // PARSING
     // ═══════════════════════════════════════════════════════════════
 
-    private List<PlayerRanking> parseResponse(String body) throws ScrapingException {
+    private List<PlayerRanking> parseResponse(String body, String rankType) throws ScrapingException {
         try {
             JsonNode root = objectMapper.readTree(body);
             JsonNode playersNode = root.path("players");
@@ -182,9 +203,9 @@ public class ESPNScraper implements RankingScraper {
                 int teamId = playerNode.path("proTeamId").asInt(0);
                 String team = TEAM_MAP.getOrDefault(teamId, "FA");
 
-                // Draft rank — try draftRanksByRankType.STANDARD.rank first
+                // Draft rank — try draftRanksByRankType.[rankType].rank first
                 int rank = fallbackRank;
-                JsonNode draftRanks = playerNode.path("draftRanksByRankType").path("STANDARD");
+                JsonNode draftRanks = playerNode.path("draftRanksByRankType").path(rankType);
                 if (!draftRanks.isMissingNode() && draftRanks.has("rank")) {
                     rank = draftRanks.path("rank").asInt(fallbackRank);
                 }

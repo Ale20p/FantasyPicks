@@ -14,7 +14,8 @@ Data Sources:
     - PPR: https://api.sleeper.com/projections/nfl/2026?season_type=regular&position[]=DEF&position[]=K&position[]=QB&position[]=RB&position[]=TE&position[]=WR&order_by=adp_ppr
     - Half PPR: https://api.sleeper.com/projections/nfl/2026?season_type=regular&position[]=DEF&position[]=K&position[]=QB&position[]=RB&position[]=TE&position[]=WR&order_by=adp_half_ppr
     - Standard/Non-PPR: https://api.sleeper.com/projections/nfl/2026?season_type=regular&position[]=DEF&position[]=K&position[]=QB&position[]=RB&position[]=TE&position[]=WR&order_by=adp_std
-- ESPN
+- ESPN: (Not possible currently)
+    - https://github.com/pseudo-r/Public-ESPN-API
 - NFL.com
 - FantasyPros
 - CBS Sports
